@@ -3,25 +3,56 @@ const Teacher = require('../models/teacherSchema.js');
 const Subject = require('../models/subjectSchema.js');
 
 const teacherRegister = async (req, res) => {
-    const { name, email, password, role, school, teachSubject, teachSclass } = req.body;
+    const { name, email, password, role, school, teachSubject, teachSclass, teacherType } = req.body;
     try {
+        console.log('📝 Teacher registration request:', email);
+        
         const salt = await bcrypt.genSalt(10);
         const hashedPass = await bcrypt.hash(password, salt);
-
-        const teacher = new Teacher({ name, email, password: hashedPass, role, school, teachSubject, teachSclass });
 
         const existingTeacherByEmail = await Teacher.findOne({ email });
 
         if (existingTeacherByEmail) {
-            res.send({ message: 'Email already exists' });
+            console.log('❌ Email already exists');
+            return res.send({ message: 'Email already exists' });
         }
-        else {
-            let result = await teacher.save();
+
+        // Create teacher with both old and new schema fields for backward compatibility
+        const teacherData = {
+            name,
+            email,
+            password: hashedPass,
+            role,
+            school,
+            teachSubject, // Legacy field
+            teachSclass, // Legacy field
+            teacherType: teacherType || 'main_teacher' // Default to main_teacher
+        };
+
+        // Add new schema fields based on teacher type
+        if (teacherType === 'main_teacher') {
+            teacherData.homeroomClass = teachSclass;
+            teacherData.teachSubjects = teachSubject ? [{ subject: teachSubject, classes: [teachSclass] }] : [];
+        } else if (teacherType === 'subject_teacher') {
+            teacherData.primarySubject = teachSubject;
+            teacherData.teachClasses = [teachSclass];
+        }
+
+        const teacher = new Teacher(teacherData);
+        
+        console.log('💾 Saving teacher to database...');
+        let result = await teacher.save();
+        
+        // Update subject with teacher reference
+        if (teachSubject) {
             await Subject.findByIdAndUpdate(teachSubject, { teacher: teacher._id });
-            result.password = undefined;
-            res.send(result);
         }
+        
+        result.password = undefined;
+        console.log('✅ Teacher registered successfully:', result.email);
+        res.send(result);
     } catch (err) {
+        console.error('❌ Teacher registration error:', err);
         res.status(500).json(err);
     }
 };

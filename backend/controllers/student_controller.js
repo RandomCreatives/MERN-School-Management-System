@@ -4,6 +4,8 @@ const Subject = require('../models/subjectSchema.js');
 
 const studentRegister = async (req, res) => {
     try {
+        console.log('📝 Student registration request:', req.body.name);
+        
         const salt = await bcrypt.genSalt(10);
         const hashedPass = await bcrypt.hash(req.body.password, salt);
 
@@ -14,21 +16,29 @@ const studentRegister = async (req, res) => {
         });
 
         if (existingStudent) {
-            res.send({ message: 'Roll Number already exists' });
+            console.log('❌ Roll number already exists');
+            return res.send({ message: 'Roll Number already exists' });
         }
-        else {
-            const student = new Student({
-                ...req.body,
-                school: req.body.adminID,
-                password: hashedPass
-            });
 
-            let result = await student.save();
+        // Generate studentId if not provided
+        const studentId = req.body.studentId || `BIS${new Date().getFullYear()}${String(req.body.rollNum).padStart(4, '0')}`;
 
-            result.password = undefined;
-            res.send(result);
-        }
+        const student = new Student({
+            ...req.body,
+            studentId,
+            school: req.body.adminID,
+            password: hashedPass,
+            active: true
+        });
+
+        console.log('💾 Saving student to database...');
+        let result = await student.save();
+
+        result.password = undefined;
+        console.log('✅ Student registered successfully:', result.name);
+        res.send(result);
     } catch (err) {
+        console.error('❌ Student registration error:', err);
         res.status(500).json(err);
     }
 };

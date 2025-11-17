@@ -57,25 +57,32 @@ const Complain = require('../models/complainSchema.js');
 
 const adminRegister = async (req, res) => {
     try {
-        const admin = new Admin({
-            ...req.body
-        });
-
+        console.log('📝 Admin registration request received:', req.body.email);
+        
         const existingAdminByEmail = await Admin.findOne({ email: req.body.email });
         const existingSchool = await Admin.findOne({ schoolName: req.body.schoolName });
 
         if (existingAdminByEmail) {
-            res.send({ message: 'Email already exists' });
+            console.log('❌ Email already exists');
+            return res.send({ message: 'Email already exists' });
         }
         else if (existingSchool) {
-            res.send({ message: 'School name already exists' });
+            console.log('❌ School name already exists');
+            return res.send({ message: 'School name already exists' });
         }
-        else {
-            let result = await admin.save();
-            result.password = undefined;
-            res.send(result);
-        }
+        
+        const admin = new Admin({
+            ...req.body
+        });
+        
+        console.log('💾 Saving admin to database...');
+        let result = await admin.save();
+        result.password = undefined;
+        
+        console.log('✅ Admin registered successfully:', result.email);
+        res.send(result);
     } catch (err) {
+        console.error('❌ Admin registration error:', err);
         res.status(500).json(err);
     }
 };
