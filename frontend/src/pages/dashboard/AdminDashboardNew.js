@@ -10,6 +10,7 @@ import {
     Close, Phone, Email, ContactPhone, Accessible, Edit, Delete, SwapHoriz
 } from '@mui/icons-material';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../../config/api';
 
 // Tab Panel Component
 function TabPanel({ children, value, index }) {
@@ -91,7 +92,7 @@ const AdminDashboardNew = () => {
     const fetchStudents = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('http://localhost:5000/Students/all');
+            const response = await axios.get(API_ENDPOINTS.STUDENTS_ALL);
             if (response.data && Array.isArray(response.data)) {
                 setStudents(response.data);
                 
@@ -110,7 +111,7 @@ const AdminDashboardNew = () => {
 
     const fetchClasses = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/Sclasses');
+            const response = await axios.get(API_ENDPOINTS.CLASSES_ALL);
             if (response.data && Array.isArray(response.data)) {
                 setClassesData(response.data);
             }
@@ -246,7 +247,7 @@ const AdminDashboardNew = () => {
                 specialNeeds: formData.specialNeeds.hasSpecialNeeds ? formData.specialNeeds : undefined
             };
             
-            const response = await axios.post('http://localhost:5000/StudentReg', payload);
+            const response = await axios.post(API_ENDPOINTS.STUDENT_REGISTER, payload);
             
             if (response.data.message) {
                 setSubmitError(response.data.message);
@@ -339,7 +340,7 @@ const AdminDashboardNew = () => {
                 payload.password = formData.password;
             }
             
-            const response = await axios.put(`http://localhost:5000/Student/${selectedStudent._id}`, payload);
+            const response = await axios.put(API_ENDPOINTS.STUDENT_UPDATE(selectedStudent._id), payload);
             
             if (response.data.message) {
                 setSubmitError(response.data.message);
@@ -388,7 +389,7 @@ const AdminDashboardNew = () => {
         setSubmitError('');
         
         try {
-            const response = await axios.put(`http://localhost:5000/Student/${selectedStudent._id}`, {
+            const response = await axios.put(API_ENDPOINTS.STUDENT_UPDATE(selectedStudent._id), {
                 sclassName: transferToClass,
                 transferHistory: {
                     fromClass: selectedStudent.sclassName?._id,
@@ -431,7 +432,7 @@ const AdminDashboardNew = () => {
         setSubmitError('');
         
         try {
-            const response = await axios.delete(`http://localhost:5000/Student/${selectedStudent._id}`);
+            const response = await axios.delete(API_ENDPOINTS.STUDENT_DELETE(selectedStudent._id));
             
             if (response.data.message && response.data.message.includes('error')) {
                 setSubmitError(response.data.message);
@@ -451,7 +452,7 @@ const AdminDashboardNew = () => {
     const fetchTeachers = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('http://localhost:5000/AllTeachers');
+            const response = await axios.get(API_ENDPOINTS.TEACHERS_ALL);
             if (response.data && Array.isArray(response.data)) {
                 setTeachers(response.data);
             }
@@ -466,7 +467,7 @@ const AdminDashboardNew = () => {
         try {
             const adminID = JSON.parse(localStorage.getItem('user'))?.schoolId || 
                            JSON.parse(localStorage.getItem('user'))?._id;
-            const response = await axios.get(`http://localhost:5000/AllSubjects/${adminID}`);
+            const response = await axios.get(API_ENDPOINTS.SUBJECTS_ALL(adminID));
             if (response.data && Array.isArray(response.data)) {
                 setSubjects(response.data);
             }
@@ -574,7 +575,7 @@ const AdminDashboardNew = () => {
                 payload.specialization = teacherFormData.specialization;
             }
             
-            const response = await axios.post('http://localhost:5000/TeacherReg', payload);
+            const response = await axios.post(API_ENDPOINTS.TEACHER_REGISTER, payload);
             
             if (response.data.message) {
                 setSubmitError(response.data.message);
@@ -598,7 +599,7 @@ const AdminDashboardNew = () => {
         
         setLoading(true);
         try {
-            await axios.delete(`http://localhost:5000/Teacher/${teacherId}`);
+            await axios.delete(API_ENDPOINTS.TEACHER_DELETE(teacherId));
             fetchTeachers();
         } catch (err) {
             console.error('Failed to delete teacher:', err);
@@ -680,7 +681,7 @@ const AdminDashboardNew = () => {
                 payload.teachClasses = teacherFormData.teachClasses;
                 
                 // Update the subject's teacher field
-                await axios.put('http://localhost:5000/TeacherSubject', {
+                await axios.put(API_ENDPOINTS.TEACHER_SUBJECT_UPDATE, {
                     teacherId: selectedTeacher._id,
                     teachSubject: teacherFormData.primarySubject
                 });
@@ -690,7 +691,7 @@ const AdminDashboardNew = () => {
             }
             
             // Update teacher with new assignments
-            const response = await axios.put(`http://localhost:5000/Teacher/${selectedTeacher._id}`, payload);
+            const response = await axios.put(API_ENDPOINTS.TEACHER_UPDATE(selectedTeacher._id), payload);
             
             if (response.data.message) {
                 setSubmitError(response.data.message);

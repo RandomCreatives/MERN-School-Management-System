@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Paper, TextField, Button, Typography, Alert } from '@mui/material';
 import { School } from '@mui/icons-material';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 const TeacherLogin = () => {
     const [loginData, setLoginData] = useState({ teacherId: '', password: '' });
@@ -16,7 +17,7 @@ const TeacherLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:5000/TeacherLogin', loginData);
+            const response = await axios.post(API_ENDPOINTS.TEACHER_LOGIN, loginData);
             
             if (response.data._id) {
                 localStorage.setItem('teacherAccess', 'authenticated');

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Paper, TextField, Button, Typography, Tabs, Tab, Alert } from '@mui/material';
 import { AdminPanelSettings } from '@mui/icons-material';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 function TabPanel({ children, value, index }) {
     return <div hidden={value !== index}>{value === index && <Box sx={{ p: 3 }}>{children}</Box>}</div>;
@@ -31,7 +32,7 @@ const AdminLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:5000/AdminLogin', loginData);
+            const response = await axios.post(API_ENDPOINTS.ADMIN_LOGIN, loginData);
             
             if (response.data._id) {
                 // Successful login
@@ -60,7 +61,7 @@ const AdminLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:5000/AdminReg', {
+            const response = await axios.post(API_ENDPOINTS.ADMIN_REGISTER, {
                 ...signupData,
                 role: 'Admin'
             });
