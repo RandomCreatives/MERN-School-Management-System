@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Collapse, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
+import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Collapse, AppBar, Toolbar, Typography, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Tabs, Tab, Alert } from '@mui/material';
 import { Home, Dashboard, School, Person, Class, LocalLibrary, LocalHospital, ExpandLess, ExpandMore, Menu as MenuIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const drawerWidth = 280;
 
@@ -20,9 +21,24 @@ const classColors = [
     'Year 3 - Orange'
 ];
 
+function TabPanel({ children, value, index }) {
+    return <div hidden={value !== index}>{value === index && <Box sx={{ p: 3 }}>{children}</Box>}</div>;
+}
+
 const MainDashboard = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [classesOpen, setClassesOpen] = useState(false);
+    const [openLoginDialog, setOpenLoginDialog] = useState(false);
+    const [loginType, setLoginType] = useState(''); // 'admin', 'teacher', 'student'
+    const [currentTab, setCurrentTab] = useState(0);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    
+    const [adminLoginData, setAdminLoginData] = useState({ email: '', password: '' });
+    const [adminSignupData, setAdminSignupData] = useState({ name: '', email: '', password: '', schoolName: '' });
+    const [teacherLoginData, setTeacherLoginData] = useState({ teacherId: '', password: '' });
+    const [studentLoginData, setStudentLoginData] = useState({ studentId: '', password: '' });
+    
     const navigate = useNavigate();
 
     const handleDrawerToggle = () => {
@@ -31,6 +47,116 @@ const MainDashboard = ({ children }) => {
 
     const handleClassesClick = () => {
         setClassesOpen(!classesOpen);
+    };
+
+    const handleOpenLogin = (type) => {
+        setLoginType(type);
+        setCurrentTab(0);
+        setError('');
+        setOpenLoginDialog(true);
+    };
+
+    const handleCloseLogin = () => {
+        setOpenLoginDialog(false);
+        setError('');
+        setAdminLoginData({ email: '', password: '' });
+        setAdminSignupData({ name: '', email: '', password: '', schoolName: '' });
+        setTeacherLoginData({ teacherId: '', password: '' });
+        setStudentLoginData({ rollNum: '', password: '' });
+    };
+
+    const handleAdminLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const response = await axios.post('http://localhost:5000/AdminLogin', adminLoginData);
+            if (response.data._id) {
+                localStorage.setItem('adminAccess', 'authenticated');
+                localStorage.setItem('adminId', response.data._id);
+                localStorage.setItem('adminName', response.data.name);
+                localStorage.setItem('adminEmail', response.data.email);
+                localStorage.setItem('schoolName', response.data.schoolName);
+                handleCloseLogin();
+                navigate('/dashboard/admin');
+            } else {
+                setError(response.data.message || 'Login failed');
+            }
+        } catch (err) {
+            setError('Login failed. Please check your credentials.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAdminSignup = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const response = await axios.post('http://localhost:5000/AdminReg', {
+                ...adminSignupData,
+                role: 'Admin'
+            });
+            if (response.data._id) {
+                setError('');
+                alert('Registration successful! Please login.');
+                setCurrentTab(0);
+            } else {
+                setError(response.data.message || 'Registration failed');
+            }
+        } catch (err) {
+            setError('Registration failed. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleTeacherLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const response = await axios.post('http://localhost:5000/TeacherLogin', teacherLoginData);
+            if (response.data._id) {
+                localStorage.setItem('teacherAccess', 'authenticated');
+                localStorage.setItem('teacherId', response.data._id);
+                localStorage.setItem('teacherName', response.data.name);
+                localStorage.setItem('teacherEmail', response.data.email);
+                localStorage.setItem('teacherRole', response.data.role);
+                handleCloseLogin();
+                navigate('/teacher/dashboard');
+            } else {
+                setError(response.data.message || 'Login failed');
+            }
+        } catch (err) {
+            setError('Login failed. Please check your credentials.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStudentLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            const response = await axios.post('http://localhost:5000/StudentLogin', studentLoginData);
+            if (response.data._id) {
+                localStorage.setItem('studentAccess', 'authenticated');
+                localStorage.setItem('studentId', response.data._id);
+                localStorage.setItem('studentName', response.data.name);
+                localStorage.setItem('studentClass', response.data.sclassName?.sclassName);
+                handleCloseLogin();
+                navigate('/student/dashboard');
+            } else {
+                setError(response.data.message || 'Login failed');
+            }
+        } catch (err) {
+            setError('Login failed. Please check your credentials.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const drawer = (
@@ -58,7 +184,7 @@ const MainDashboard = ({ children }) => {
                 </ListItem>
 
                 <ListItem disablePadding>
-                    <ListItemButton onClick={() => navigate('/dashboard/admin')}>
+                    <ListItemButton onClick={() => handleOpenLogin('admin')}>
                         <ListItemIcon>
                             <Dashboard />
                         </ListItemIcon>
@@ -67,7 +193,7 @@ const MainDashboard = ({ children }) => {
                 </ListItem>
 
                 <ListItem disablePadding>
-                    <ListItemButton onClick={() => navigate('/dashboard/teachers')}>
+                    <ListItemButton onClick={() => handleOpenLogin('teacher')}>
                         <ListItemIcon>
                             <School />
                         </ListItemIcon>
@@ -76,7 +202,7 @@ const MainDashboard = ({ children }) => {
                 </ListItem>
 
                 <ListItem disablePadding>
-                    <ListItemButton onClick={() => navigate('/dashboard/students')}>
+                    <ListItemButton onClick={() => handleOpenLogin('student')}>
                         <ListItemIcon>
                             <Person />
                         </ListItemIcon>
@@ -213,6 +339,154 @@ const MainDashboard = ({ children }) => {
                 <Toolbar />
                 {children}
             </Box>
+
+            {/* Login Dialog */}
+            <Dialog open={openLoginDialog} onClose={handleCloseLogin} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ bgcolor: loginType === 'admin' ? '#1e40af' : loginType === 'teacher' ? '#059669' : '#7c3aed', color: 'white' }}>
+                    {loginType === 'admin' ? 'Admin Portal' : loginType === 'teacher' ? 'Teacher Portal' : 'Student Portal'}
+                </DialogTitle>
+
+                {loginType === 'admin' && (
+                    <>
+                        <Tabs value={currentTab} onChange={(e, v) => setCurrentTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }} centered>
+                            <Tab label="Login" />
+                            <Tab label="Register" />
+                        </Tabs>
+
+                        <TabPanel value={currentTab} index={0}>
+                            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                            <form onSubmit={handleAdminLogin}>
+                                <TextField
+                                    fullWidth
+                                    label="Email"
+                                    type="email"
+                                    value={adminLoginData.email}
+                                    onChange={(e) => setAdminLoginData({ ...adminLoginData, email: e.target.value })}
+                                    sx={{ mb: 2 }}
+                                    required
+                                />
+                                <TextField
+                                    fullWidth
+                                    label="Password"
+                                    type="password"
+                                    value={adminLoginData.password}
+                                    onChange={(e) => setAdminLoginData({ ...adminLoginData, password: e.target.value })}
+                                    sx={{ mb: 2 }}
+                                    required
+                                />
+                                <Button type="submit" variant="contained" fullWidth disabled={loading} sx={{ bgcolor: '#1e40af' }}>
+                                    {loading ? 'Logging in...' : 'Login'}
+                                </Button>
+                            </form>
+                        </TabPanel>
+
+                        <TabPanel value={currentTab} index={1}>
+                            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                            <form onSubmit={handleAdminSignup}>
+                                <TextField
+                                    fullWidth
+                                    label="Full Name"
+                                    value={adminSignupData.name}
+                                    onChange={(e) => setAdminSignupData({ ...adminSignupData, name: e.target.value })}
+                                    sx={{ mb: 2 }}
+                                    required
+                                />
+                                <TextField
+                                    fullWidth
+                                    label="School Name"
+                                    value={adminSignupData.schoolName}
+                                    onChange={(e) => setAdminSignupData({ ...adminSignupData, schoolName: e.target.value })}
+                                    sx={{ mb: 2 }}
+                                    required
+                                />
+                                <TextField
+                                    fullWidth
+                                    label="Email"
+                                    type="email"
+                                    value={adminSignupData.email}
+                                    onChange={(e) => setAdminSignupData({ ...adminSignupData, email: e.target.value })}
+                                    sx={{ mb: 2 }}
+                                    required
+                                />
+                                <TextField
+                                    fullWidth
+                                    label="Password"
+                                    type="password"
+                                    value={adminSignupData.password}
+                                    onChange={(e) => setAdminSignupData({ ...adminSignupData, password: e.target.value })}
+                                    sx={{ mb: 2 }}
+                                    required
+                                />
+                                <Button type="submit" variant="contained" fullWidth disabled={loading} sx={{ bgcolor: '#10b981' }}>
+                                    {loading ? 'Registering...' : 'Register'}
+                                </Button>
+                            </form>
+                        </TabPanel>
+                    </>
+                )}
+
+                {loginType === 'teacher' && (
+                    <DialogContent>
+                        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                        <form onSubmit={handleTeacherLogin}>
+                            <TextField
+                                fullWidth
+                                label="Teacher ID"
+                                value={teacherLoginData.teacherId}
+                                onChange={(e) => setTeacherLoginData({ ...teacherLoginData, teacherId: e.target.value })}
+                                sx={{ mb: 2 }}
+                                required
+                                helperText="Use your assigned Teacher ID (e.g., TCH001)"
+                            />
+                            <TextField
+                                fullWidth
+                                label="Password"
+                                type="password"
+                                value={teacherLoginData.password}
+                                onChange={(e) => setTeacherLoginData({ ...teacherLoginData, password: e.target.value })}
+                                sx={{ mb: 2 }}
+                                required
+                            />
+                            <Button type="submit" variant="contained" fullWidth disabled={loading} sx={{ bgcolor: '#059669' }}>
+                                {loading ? 'Logging in...' : 'Login'}
+                            </Button>
+                        </form>
+                    </DialogContent>
+                )}
+
+                {loginType === 'student' && (
+                    <DialogContent>
+                        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                        <form onSubmit={handleStudentLogin}>
+                            <TextField
+                                fullWidth
+                                label="Student ID"
+                                value={studentLoginData.studentId}
+                                onChange={(e) => setStudentLoginData({ ...studentLoginData, studentId: e.target.value })}
+                                sx={{ mb: 2 }}
+                                required
+                                helperText="Use your assigned Student ID (e.g., BIS20240001)"
+                            />
+                            <TextField
+                                fullWidth
+                                label="Password"
+                                type="password"
+                                value={studentLoginData.password}
+                                onChange={(e) => setStudentLoginData({ ...studentLoginData, password: e.target.value })}
+                                sx={{ mb: 2 }}
+                                required
+                            />
+                            <Button type="submit" variant="contained" fullWidth disabled={loading} sx={{ bgcolor: '#7c3aed' }}>
+                                {loading ? 'Logging in...' : 'Login'}
+                            </Button>
+                        </form>
+                    </DialogContent>
+                )}
+
+                <DialogActions>
+                    <Button onClick={handleCloseLogin}>Cancel</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

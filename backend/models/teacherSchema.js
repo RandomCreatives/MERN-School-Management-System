@@ -5,6 +5,11 @@ const teacherSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    teacherId: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
     email: {
         type: String,
         unique: true,

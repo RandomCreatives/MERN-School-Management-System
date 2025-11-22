@@ -45,10 +45,33 @@ const studentRegister = async (req, res) => {
 
 const studentLogIn = async (req, res) => {
     try {
-        let student = await Student.findOne({ rollNum: req.body.rollNum, name: req.body.studentName });
+        console.log('🔐 Student login attempt:', req.body);
+        
+        // Support login with studentId or rollNum
+        let student;
+        
+        if (req.body.studentId) {
+            // Login with studentId (e.g., "Blue001")
+            student = await Student.findOne({ studentId: req.body.studentId });
+        } else if (req.body.rollNum && req.body.studentName) {
+            // Legacy login with rollNum and name
+            student = await Student.findOne({ 
+                rollNum: req.body.rollNum, 
+                name: req.body.studentName 
+            });
+        } else if (req.body.rollNum) {
+            // Try rollNum as number
+            const rollNumAsNumber = parseInt(req.body.rollNum);
+            if (!isNaN(rollNumAsNumber)) {
+                student = await Student.findOne({ rollNum: rollNumAsNumber });
+            }
+        }
+        
         if (student) {
+            console.log('✅ Student found:', student.name);
             const validated = await bcrypt.compare(req.body.password, student.password);
             if (validated) {
+                console.log('✅ Password validated');
                 student = await student.populate("school", "schoolName")
                 student = await student.populate("sclassName", "sclassName")
                 student.password = undefined;
@@ -56,12 +79,36 @@ const studentLogIn = async (req, res) => {
                 student.attendance = undefined;
                 res.send(student);
             } else {
+                console.log('❌ Invalid password');
                 res.send({ message: "Invalid password" });
             }
         } else {
+            console.log('❌ Student not found');
             res.send({ message: "Student not found" });
         }
     } catch (err) {
+        console.error('❌ Login error:', err);
+        res.status(500).json(err);
+    }
+};
+
+const getAllStudents = async (req, res) => {
+    try {
+        console.log('📚 Fetching all students...');
+        const students = await Student.find().populate("sclassName", "sclassName");
+        
+        if (students.length > 0) {
+            console.log(`✅ Found ${students.length} students`);
+            let modifiedStudents = students.map((student) => {
+                return { ...student._doc, password: undefined };
+            });
+            res.send(modifiedStudents);
+        } else {
+            console.log('❌ No students found');
+            res.send({ message: "No students found" });
+        }
+    } catch (err) {
+        console.error('❌ Error fetching students:', err);
         res.status(500).json(err);
     }
 };
@@ -285,6 +332,7 @@ const removeStudentAttendance = async (req, res) => {
 module.exports = {
     studentRegister,
     studentLogIn,
+    getAllStudents,
     getStudents,
     getStudentDetail,
     deleteStudents,

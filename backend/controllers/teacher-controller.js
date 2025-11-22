@@ -3,7 +3,7 @@ const Teacher = require('../models/teacherSchema.js');
 const Subject = require('../models/subjectSchema.js');
 
 const teacherRegister = async (req, res) => {
-    const { name, email, password, role, school, teachSubject, teachSclass, teacherType } = req.body;
+    const { name, email, password, role, school, teachSubject, teachSclass, teacherType, teacherId } = req.body;
     try {
         console.log('📝 Teacher registration request:', email);
         
@@ -17,10 +17,18 @@ const teacherRegister = async (req, res) => {
             return res.send({ message: 'Email already exists' });
         }
 
+        // Generate teacherId if not provided
+        let generatedTeacherId = teacherId;
+        if (!generatedTeacherId) {
+            const teacherCount = await Teacher.countDocuments();
+            generatedTeacherId = `TCH${String(teacherCount + 1).padStart(3, '0')}`;
+        }
+
         // Create teacher with both old and new schema fields for backward compatibility
         const teacherData = {
             name,
             email,
+            teacherId: generatedTeacherId,
             password: hashedPass,
             role,
             school,
@@ -59,7 +67,15 @@ const teacherRegister = async (req, res) => {
 
 const teacherLogIn = async (req, res) => {
     try {
-        let teacher = await Teacher.findOne({ email: req.body.email });
+        // Support login with either email or teacherId
+        const loginField = req.body.email || req.body.teacherId;
+        let teacher = await Teacher.findOne({ 
+            $or: [
+                { email: loginField },
+                { teacherId: loginField }
+            ]
+        });
+        
         if (teacher) {
             const validated = await bcrypt.compare(req.body.password, teacher.password);
             if (validated) {
@@ -89,6 +105,23 @@ const getTeachers = async (req, res) => {
                 return { ...teacher._doc, password: undefined };
             });
             res.send(modifiedTeachers);
+        } else {
+            res.send({ message: "No teachers found" });
+        }
+    } catch (err) {
+        res.status(500).json(err);
+    }
+};
+
+const getAllTeachers = async (req, res) => {
+    try {
+        let teachers = await Teacher.find()
+            .populate("teachSubject", "subName")
+            .populate("teachSclass", "sclassName")
+            .select('-password');
+        
+        if (teachers.length > 0) {
+            res.send(teachers);
         } else {
             res.send({ message: "No teachers found" });
         }
@@ -223,12 +256,40 @@ const teacherAttendance = async (req, res) => {
     }
 };
 
+const updateTeacher = async (req, res) => {
+    try {
+        const teacherId = req.params.id;
+        const updateData = req.body;
+        
+        const updatedTeacher = await Teacher.findByIdAndUpdate(
+            teacherId,
+            updateData,
+            { new: true }
+        ).populate('homeroomClass', 'sclassName')
+         .populate('primarySubject', 'subName subCode')
+         .populate('teachClasses', 'sclassName')
+         .populate('teachSubjects.subject', 'subName subCode')
+         .populate('teachSubjects.classes', 'sclassName');
+
+        if (!updatedTeacher) {
+            return res.status(404).json({ message: 'Teacher not found' });
+        }
+
+        res.send(updatedTeacher);
+    } catch (error) {
+        console.error('Update teacher error:', error);
+        res.status(500).json(error);
+    }
+};
+
 module.exports = {
     teacherRegister,
     teacherLogIn,
     getTeachers,
+    getAllTeachers,
     getTeacherDetail,
     updateTeacherSubject,
+    updateTeacher,
     deleteTeacher,
     deleteTeachers,
     deleteTeachersByClass,

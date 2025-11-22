@@ -1,6 +1,5 @@
-import React from 'react';
 import { Box, Typography, Paper, Grid, Card, CardContent } from '@mui/material';
-import { LocalLibrary, Book, Person, CalendarToday } from '@mui/icons-material';
+import { LocalLibrary, Book } from '@mui/icons-material';
 
 const Library = () => {
     return (

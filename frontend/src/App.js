@@ -1,14 +1,18 @@
-import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Homepage from './pages/Homepage';
-import MainDashboard from './pages/MainDashboard';
+import AdminLogin from './pages/AdminLogin';
+import TeacherLogin from './pages/TeacherLogin';
+import LoginPage from './pages/LoginPage';
+import MainDashboardMinimal from './pages/MainDashboardMinimal';
 import HomePage from './pages/dashboard/HomePage';
 import AdminDashboardNew from './pages/dashboard/AdminDashboardNew';
 import TeachersPortal from './pages/dashboard/TeachersPortal';
 import StudentsPortal from './pages/dashboard/StudentsPortal';
-import ClassView from './pages/dashboard/ClassView';
+import ClassViewEnhanced from './pages/dashboard/ClassViewEnhanced';
 import Library from './pages/dashboard/Library';
 import Clinic from './pages/dashboard/Clinic';
+import TeacherDashboard from './pages/teacher/TeacherDashboard';
+import StudentDashboard from './pages/student/StudentDashboard';
 
 const App = () => {
   return (
@@ -17,20 +21,31 @@ const App = () => {
         {/* Landing Page */}
         <Route path="/" element={<Homepage />} />
         
+        {/* Login Pages */}
+        <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/teacher-login" element={<TeacherLogin />} />
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* Teacher Dashboard */}
+        <Route path="/teacher/dashboard/*" element={<TeacherDashboard />} />
+        
+        {/* Student Dashboard */}
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
+        
         {/* Main Dashboard with Sidebar */}
         <Route path="/dashboard/*" element={
-          <MainDashboard>
+          <MainDashboardMinimal>
             <Routes>
               <Route path="home" element={<HomePage />} />
               <Route path="admin" element={<AdminDashboardNew />} />
               <Route path="teachers" element={<TeachersPortal />} />
               <Route path="students" element={<StudentsPortal />} />
-              <Route path="class/:className" element={<ClassView />} />
+              <Route path="class/:className" element={<ClassViewEnhanced />} />
               <Route path="library" element={<Library />} />
               <Route path="clinic" element={<Clinic />} />
               <Route path="*" element={<Navigate to="/dashboard/home" />} />
             </Routes>
-          </MainDashboard>
+          </MainDashboardMinimal>
         } />
 
         {/* Fallback */}

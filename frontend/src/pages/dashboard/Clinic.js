@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, Typography, Paper, Grid, Card, CardContent } from '@mui/material';
 import { LocalHospital, Assignment, Approval } from '@mui/icons-material';
 
