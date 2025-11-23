@@ -22,7 +22,7 @@ const AdminLogin = () => {
     const handleQuickAccess = () => {
         localStorage.setItem('adminAccess', 'quick');
         localStorage.setItem('adminName', 'Guest Admin');
-        navigate('/dashboard/home');
+        navigate('/admin-dashboard/home');
     };
 
     // Login Handler
@@ -41,7 +41,7 @@ const AdminLogin = () => {
                 localStorage.setItem('adminName', response.data.name);
                 localStorage.setItem('adminEmail', response.data.email);
                 localStorage.setItem('schoolName', response.data.schoolName);
-                navigate('/dashboard/home');
+                navigate('/admin-dashboard/home');
             } else {
                 setError(response.data.message || 'Login failed');
             }

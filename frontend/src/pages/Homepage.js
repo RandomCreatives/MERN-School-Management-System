@@ -5,7 +5,7 @@ import {
     AppBar, Toolbar, IconButton, Menu, MenuItem, Dialog, DialogTitle, 
     DialogContent, TextField, Alert, Tabs, Tab 
 } from '@mui/material';
-import { ArrowForward, School, Menu as MenuIcon, Person, AdminPanelSettings, Close } from '@mui/icons-material';
+import { ArrowForward, School, Menu as MenuIcon, Person, AdminPanelSettings, Close, LocalLibrary, LocalHospital } from '@mui/icons-material';
 import axios from 'axios';
 
 function TabPanel({ children, value, index }) {
@@ -30,7 +30,8 @@ const Homepage = () => {
 
     const fetchTeachers = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/AllTeachers');
+            const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+            const response = await axios.get(`${API_URL}/AllTeachers`);
             if (response.data && Array.isArray(response.data)) {
                 // Get all main teachers
                 const mainTeachers = response.data
@@ -111,6 +112,9 @@ const Homepage = () => {
                         <Button sx={{ color: '#666', textTransform: 'none', fontWeight: 500 }} href="#teachers">
                             Our Teachers
                         </Button>
+                        <Button sx={{ color: '#666', textTransform: 'none', fontWeight: 500 }} href="#gallery">
+                            Gallery
+                        </Button>
                         <Button sx={{ color: '#666', textTransform: 'none', fontWeight: 500 }} href="#about">
                             About
                         </Button>
@@ -161,6 +165,7 @@ const Homepage = () => {
                     >
                         <MenuItem onClick={() => { handleMenuClose(); window.location.href = '#home'; }}>Home</MenuItem>
                         <MenuItem onClick={() => { handleMenuClose(); window.location.href = '#teachers'; }}>Our Teachers</MenuItem>
+                        <MenuItem onClick={() => { handleMenuClose(); window.location.href = '#gallery'; }}>Gallery</MenuItem>
                         <MenuItem onClick={() => { handleMenuClose(); window.location.href = '#about'; }}>About</MenuItem>
                         <MenuItem onClick={() => { handleMenuClose(); setOpenTeacherLogin(true); }}>Teacher Login</MenuItem>
                         <MenuItem onClick={() => { handleMenuClose(); navigate('/admin-login'); }}>Admin Login</MenuItem>
@@ -235,7 +240,7 @@ const Homepage = () => {
                                 <Button
                                     variant="contained"
                                     size="large"
-                                    onClick={() => navigate('/dashboard/home')}
+                                    onClick={() => navigate('/get-started')}
                                     endIcon={<ArrowForward />}
                                     sx={{
                                         background: '#000',
@@ -278,7 +283,7 @@ const Homepage = () => {
                 </Container>
             </Box>
 
-            {/* Our Teachers Section */}
+            {/* Our Teachers Section - Horizontal Carousel */}
             <Box id="teachers" sx={{ py: 10, bgcolor: '#fff' }}>
                 <Container maxWidth="lg">
                     <Box sx={{ textAlign: 'center', mb: 6 }}>
@@ -290,90 +295,447 @@ const Homepage = () => {
                         </Typography>
                     </Box>
 
-                    <Grid container spacing={4}>
-                        {(showAllTeachers ? teachers : teachers.slice(0, 6)).map((teacher) => (
-                            <Grid item xs={12} sm={6} md={4} key={teacher._id}>
-                                <Card sx={{
-                                    borderRadius: '16px',
-                                    border: '1px solid #f0f0f0',
-                                    boxShadow: 'none',
+                    {/* Horizontal Scrolling Carousel */}
+                    <Box sx={{ 
+                        display: 'flex',
+                        overflowX: 'auto',
+                        gap: 3,
+                        pb: 3,
+                        px: { xs: 2, sm: 0 },
+                        scrollBehavior: 'smooth',
+                        '&::-webkit-scrollbar': {
+                            height: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                            background: '#f1f1f1',
+                            borderRadius: '10px',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                            background: '#888',
+                            borderRadius: '10px',
+                            '&:hover': {
+                                background: '#555',
+                            }
+                        }
+                    }}>
+                        {teachers.map((teacher, index) => {
+                            // Array of beautiful gradient combinations
+                            const gradients = [
+                                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                                'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                                'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                                'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+                                'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                                'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+                                'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+                                'linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%)',
+                            ];
+                            
+                            const gradient = gradients[index % gradients.length];
+                            
+                            return (
+                                <Card key={teacher._id} sx={{
+                                    minWidth: { xs: 280, sm: 320 },
+                                    maxWidth: { xs: 280, sm: 320 },
+                                    borderRadius: '20px',
+                                    overflow: 'hidden',
+                                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                                     transition: 'all 0.3s ease',
+                                    flexShrink: 0,
+                                    position: 'relative',
                                     '&:hover': {
-                                        transform: 'translateY(-8px)',
-                                        boxShadow: '0 12px 40px rgba(0,0,0,0.1)'
+                                        transform: 'translateY(-12px)',
+                                        boxShadow: '0 12px 40px rgba(0,0,0,0.15)'
                                     }
                                 }}>
-                                    <CardContent sx={{ p: 4, textAlign: 'center' }}>
+                                    {/* Gradient Header */}
+                                    <Box sx={{
+                                        height: 120,
+                                        background: gradient,
+                                        position: 'relative'
+                                    }} />
+                                    
+                                    {/* Profile Content */}
+                                    <CardContent sx={{ 
+                                        p: 3, 
+                                        textAlign: 'center',
+                                        mt: -5,
+                                        position: 'relative'
+                                    }}>
+                                        {/* Avatar with white border */}
                                         <Avatar
                                             sx={{
-                                                width: 80,
-                                                height: 80,
-                                                bgcolor: '#000',
-                                                fontSize: '2rem',
+                                                width: 100,
+                                                height: 100,
+                                                background: gradient,
+                                                fontSize: '2.5rem',
                                                 fontWeight: 700,
                                                 mx: 'auto',
-                                                mb: 2
+                                                mb: 2,
+                                                border: '4px solid #fff',
+                                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                                color: '#fff'
                                             }}
                                         >
                                             {teacher.name?.charAt(0)}
                                         </Avatar>
-                                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                        
+                                        {/* Teacher Info */}
+                                        <Typography variant="h6" sx={{ 
+                                            fontWeight: 700, 
+                                            mb: 0.5,
+                                            color: '#1a1a1a'
+                                        }}>
                                             {teacher.name}
                                         </Typography>
-                                        <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                                        
+                                        <Typography variant="body2" sx={{ 
+                                            color: '#666', 
+                                            mb: 1,
+                                            fontWeight: 500
+                                        }}>
                                             {teacher.teachSclass?.sclassName || teacher.homeroomClass?.sclassName || 'Main Teacher'}
                                         </Typography>
-                                        <Typography variant="caption" sx={{ color: '#999' }}>
-                                            {teacher.teacherId}
-                                        </Typography>
+                                        
+                                        {/* Teacher ID Badge */}
+                                        <Box sx={{
+                                            display: 'inline-block',
+                                            px: 2,
+                                            py: 0.5,
+                                            borderRadius: '20px',
+                                            background: 'rgba(0,0,0,0.05)',
+                                            mt: 1
+                                        }}>
+                                            <Typography variant="caption" sx={{ 
+                                                color: '#666',
+                                                fontWeight: 600,
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                {teacher.teacherId}
+                                            </Typography>
+                                        </Box>
                                     </CardContent>
                                 </Card>
+                            );
+                        })}
+                    </Box>
+
+                    {teachers.length === 0 && (
+                        <Box sx={{ textAlign: 'center', py: 6 }}>
+                            <Typography variant="body1" sx={{ color: '#999' }}>
+                                No teachers available at the moment.
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {teachers.length > 0 && (
+                        <Box sx={{ textAlign: 'center', mt: 4 }}>
+                            <Typography variant="body2" sx={{ color: '#999' }}>
+                                Scroll horizontally to see all {teachers.length} teachers →
+                            </Typography>
+                        </Box>
+                    )}
+                </Container>
+            </Box>
+
+            {/* Student Life Gallery Section */}
+            <Box id="gallery" sx={{ py: 10, bgcolor: '#f9fafb' }}>
+                <Container maxWidth="lg">
+                    <Box sx={{ textAlign: 'center', mb: 6 }}>
+                        <Typography variant="h3" sx={{ fontWeight: 700, color: '#000', mb: 2 }}>
+                            Student Life Gallery
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: '#666', fontSize: '1.125rem', maxWidth: 600, mx: 'auto' }}>
+                            Capturing moments of learning, growth, and joy at BIS NOC
+                        </Typography>
+                    </Box>
+
+                    {/* Image Grid */}
+                    <Grid container spacing={3}>
+                        {/* Large Featured Image */}
+                        <Grid item xs={12} md={6}>
+                            <Box sx={{
+                                height: { xs: 300, md: 500 },
+                                borderRadius: '20px',
+                                overflow: 'hidden',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'transform 0.3s ease',
+                                '&:hover': {
+                                    transform: 'scale(1.02)',
+                                    '& .overlay': {
+                                        opacity: 1
+                                    }
+                                }
+                            }}>
+                                <Box sx={{
+                                    width: '100%',
+                                    height: '100%',
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexDirection: 'column',
+                                    color: '#fff'
+                                }}>
+                                    <School sx={{ fontSize: 80, mb: 2, opacity: 0.9 }} />
+                                    <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                                        Classroom Learning
+                                    </Typography>
+                                </Box>
+                                <Box className="overlay" sx={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    background: 'rgba(0,0,0,0.5)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: 0,
+                                    transition: 'opacity 0.3s ease'
+                                }}>
+                                    <Typography variant="h6" sx={{ color: '#fff', fontWeight: 600 }}>
+                                        View Gallery
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        </Grid>
+
+                        {/* Grid of Smaller Images */}
+                        <Grid item xs={12} md={6}>
+                            <Grid container spacing={3}>
+                                {/* Sports & Activities */}
+                                <Grid item xs={6}>
+                                    <Box sx={{
+                                        height: 240,
+                                        borderRadius: '20px',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'scale(1.05)',
+                                            '& .overlay': {
+                                                opacity: 1
+                                            }
+                                        }
+                                    }}>
+                                        <Box sx={{
+                                            width: '100%',
+                                            height: '100%',
+                                            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexDirection: 'column',
+                                            color: '#fff'
+                                        }}>
+                                            <Typography variant="h6" sx={{ fontWeight: 600, textAlign: 'center', px: 2 }}>
+                                                Sports & Activities
+                                            </Typography>
+                                        </Box>
+                                        <Box className="overlay" sx={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            background: 'rgba(0,0,0,0.5)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            opacity: 0,
+                                            transition: 'opacity 0.3s ease'
+                                        }}>
+                                            <Typography variant="body1" sx={{ color: '#fff', fontWeight: 600 }}>
+                                                View
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Grid>
+
+                                {/* Science Lab */}
+                                <Grid item xs={6}>
+                                    <Box sx={{
+                                        height: 240,
+                                        borderRadius: '20px',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'scale(1.05)',
+                                            '& .overlay': {
+                                                opacity: 1
+                                            }
+                                        }
+                                    }}>
+                                        <Box sx={{
+                                            width: '100%',
+                                            height: '100%',
+                                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexDirection: 'column',
+                                            color: '#fff'
+                                        }}>
+                                            <Typography variant="h6" sx={{ fontWeight: 600, textAlign: 'center', px: 2 }}>
+                                                Science Lab
+                                            </Typography>
+                                        </Box>
+                                        <Box className="overlay" sx={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            background: 'rgba(0,0,0,0.5)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            opacity: 0,
+                                            transition: 'opacity 0.3s ease'
+                                        }}>
+                                            <Typography variant="body1" sx={{ color: '#fff', fontWeight: 600 }}>
+                                                View
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Grid>
+
+                                {/* Library */}
+                                <Grid item xs={6}>
+                                    <Box sx={{
+                                        height: 240,
+                                        borderRadius: '20px',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'scale(1.05)',
+                                            '& .overlay': {
+                                                opacity: 1
+                                            }
+                                        }
+                                    }}>
+                                        <Box sx={{
+                                            width: '100%',
+                                            height: '100%',
+                                            background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexDirection: 'column',
+                                            color: '#fff'
+                                        }}>
+                                            <Typography variant="h6" sx={{ fontWeight: 600, textAlign: 'center', px: 2 }}>
+                                                Library
+                                            </Typography>
+                                        </Box>
+                                        <Box className="overlay" sx={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            background: 'rgba(0,0,0,0.5)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            opacity: 0,
+                                            transition: 'opacity 0.3s ease'
+                                        }}>
+                                            <Typography variant="body1" sx={{ color: '#fff', fontWeight: 600 }}>
+                                                View
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Grid>
+
+                                {/* Events & Celebrations */}
+                                <Grid item xs={6}>
+                                    <Box sx={{
+                                        height: 240,
+                                        borderRadius: '20px',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'scale(1.05)',
+                                            '& .overlay': {
+                                                opacity: 1
+                                            }
+                                        }
+                                    }}>
+                                        <Box sx={{
+                                            width: '100%',
+                                            height: '100%',
+                                            background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexDirection: 'column',
+                                            color: '#fff'
+                                        }}>
+                                            <Typography variant="h6" sx={{ fontWeight: 600, textAlign: 'center', px: 2 }}>
+                                                Events
+                                            </Typography>
+                                        </Box>
+                                        <Box className="overlay" sx={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            background: 'rgba(0,0,0,0.5)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            opacity: 0,
+                                            transition: 'opacity 0.3s ease'
+                                        }}>
+                                            <Typography variant="body1" sx={{ color: '#fff', fontWeight: 600 }}>
+                                                View
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Grid>
                             </Grid>
-                        ))}
+                        </Grid>
                     </Grid>
 
-                    {!showAllTeachers && teachers.length > 6 && (
-                        <Box sx={{ textAlign: 'center', mt: 6 }}>
-                            <Button
-                                variant="outlined"
-                                size="large"
-                                onClick={() => setShowAllTeachers(true)}
-                                sx={{
-                                    borderColor: '#000',
-                                    color: '#000',
-                                    py: 1.5,
-                                    px: 4,
-                                    fontSize: '1rem',
-                                    fontWeight: 600,
-                                    borderRadius: '12px',
-                                    textTransform: 'none',
+                    {/* View All Button */}
+                    <Box sx={{ textAlign: 'center', mt: 6 }}>
+                        <Button
+                            variant="outlined"
+                            size="large"
+                            sx={{
+                                borderColor: '#000',
+                                color: '#000',
+                                py: 1.5,
+                                px: 4,
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                borderRadius: '12px',
+                                textTransform: 'none',
+                                borderWidth: '2px',
+                                '&:hover': {
                                     borderWidth: '2px',
-                                    '&:hover': {
-                                        borderWidth: '2px',
-                                        borderColor: '#000',
-                                        background: 'rgba(0,0,0,0.05)'
-                                    }
-                                }}
-                            >
-                                View All {teachers.length} Teachers
-                            </Button>
-                        </Box>
-                    )}
-                    {showAllTeachers && (
-                        <Box sx={{ textAlign: 'center', mt: 6 }}>
-                            <Button
-                                variant="text"
-                                onClick={() => setShowAllTeachers(false)}
-                                sx={{
-                                    color: '#666',
-                                    textTransform: 'none',
-                                    fontWeight: 500
-                                }}
-                            >
-                                Show Less
-                            </Button>
-                        </Box>
-                    )}
+                                    borderColor: '#000',
+                                    background: 'rgba(0,0,0,0.05)'
+                                }
+                            }}
+                        >
+                            View Full Gallery
+                        </Button>
+                    </Box>
                 </Container>
             </Box>
 
@@ -415,6 +777,9 @@ const Homepage = () => {
                                 </Button>
                                 <Button sx={{ color: '#999', textTransform: 'none', justifyContent: 'flex-start', p: 0 }} href="#teachers">
                                     Our Teachers
+                                </Button>
+                                <Button sx={{ color: '#999', textTransform: 'none', justifyContent: 'flex-start', p: 0 }} href="#gallery">
+                                    Gallery
                                 </Button>
                                 <Button sx={{ color: '#999', textTransform: 'none', justifyContent: 'flex-start', p: 0 }} onClick={() => setOpenTeacherLogin(true)}>
                                     Teacher Login

@@ -25,7 +25,7 @@ const TeacherLogin = () => {
                 localStorage.setItem('teacherName', response.data.name);
                 localStorage.setItem('teacherEmail', response.data.email);
                 localStorage.setItem('teacherRole', response.data.role);
-                navigate('/teacher/dashboard');
+                navigate('/teacher-portal/home');
             } else {
                 setError(response.data.message || 'Login failed');
             }
