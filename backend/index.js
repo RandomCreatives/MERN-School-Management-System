@@ -61,9 +61,20 @@ mongoose
         process.exit(1);
     });
 
-// Routes
-app.use('/', Routes);
-app.use('/api', EnhancedRoutes); // New enhanced API routes
+// Root route
+app.get('/', (req, res) => {
+    res.status(200).json({ 
+        status: 'OK', 
+        message: 'BIS NOC School Management System API',
+        timestamp: new Date().toISOString(),
+        endpoints: {
+            health: '/health',
+            admin: '/AdminLogin, /AdminReg',
+            students: '/Students/all, /StudentReg, /StudentLogin',
+            teachers: '/AllTeachers, /TeacherReg, /TeacherLogin'
+        }
+    });
+});
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
@@ -73,6 +84,10 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+// Routes
+app.use('/', Routes);
+app.use('/api', EnhancedRoutes); // New enhanced API routes
 
 // 404 Handler
 app.use((req, res) => {
