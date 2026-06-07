@@ -6,7 +6,8 @@ import {
 } from '@mui/material';
 import {
     Home, Dashboard, People, School, Class, Assessment, Message,
-    Person, Settings, Logout, Menu as MenuIcon, Schedule, CalendarMonth
+    Person, Settings, Logout, Menu as MenuIcon, Schedule, CalendarMonth,
+    Accessible, LocalLibrary, LocalHospital
 } from '@mui/icons-material';
 
 // Import dashboard pages
@@ -21,6 +22,9 @@ import AdminReports from './admin/AdminReports';
 import AdminSendMessage from './admin/AdminSendMessage';
 import AdminProfile from './admin/AdminProfile';
 import AdminSettings from './admin/AdminSettings';
+import SpecialNeeds from './SpecialNeeds';
+import Library from './Library';
+import Clinic from './Clinic';
 
 const drawerWidth = 280;
 
@@ -55,9 +59,13 @@ const AdminDashboard = () => {
         { divider: true },
         { text: 'Student Management', icon: <People />, path: '/admin-dashboard/students' },
         { text: 'Teachers Management', icon: <School />, path: '/admin-dashboard/teachers' },
+        { text: 'Special Needs', icon: <Accessible />, path: '/admin-dashboard/special-needs' },
         { divider: true },
         { text: 'All Classes', icon: <Class />, path: '/admin-dashboard/classes' },
         { text: 'Timetable', icon: <Schedule />, path: '/admin-dashboard/timetable' },
+        { divider: true },
+        { text: 'Library', icon: <LocalLibrary />, path: '/admin-dashboard/library' },
+        { text: 'Clinic', icon: <LocalHospital />, path: '/admin-dashboard/clinic' },
         { divider: true },
         { text: 'Calendar & Events', icon: <CalendarMonth />, path: '/admin-dashboard/calendar' },
         { text: 'Reports', icon: <Assessment />, path: '/admin-dashboard/reports' },
@@ -75,7 +83,7 @@ const AdminDashboard = () => {
                     width: 40,
                     height: 40,
                     borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -113,15 +121,15 @@ const AdminDashboard = () => {
                                 sx={{
                                     borderRadius: '12px',
                                     py: 1.5,
-                                    bgcolor: isActive ? 'rgba(102, 126, 234, 0.1)' : 'transparent',
+                                    bgcolor: isActive ? 'rgba(30, 64, 175, 0.1)' : 'transparent',
                                     '&:hover': {
-                                        bgcolor: isActive ? 'rgba(102, 126, 234, 0.15)' : 'rgba(0,0,0,0.04)'
+                                        bgcolor: isActive ? 'rgba(30, 64, 175, 0.15)' : 'rgba(0,0,0,0.04)'
                                     }
                                 }}
                             >
                                 <ListItemIcon sx={{ 
                                     minWidth: 40,
-                                    color: isActive ? '#667eea' : '#666'
+                                    color: isActive ? '#1e40af' : '#666'
                                 }}>
                                     {item.icon}
                                 </ListItemIcon>
@@ -129,7 +137,7 @@ const AdminDashboard = () => {
                                     primary={item.text}
                                     primaryTypographyProps={{
                                         fontWeight: isActive ? 600 : 500,
-                                        color: isActive ? '#667eea' : '#333'
+                                        color: isActive ? '#1e40af' : '#333'
                                     }}
                                 />
                             </ListItemButton>
@@ -199,7 +207,7 @@ const AdminDashboard = () => {
                         <Avatar sx={{ 
                             width: 40, 
                             height: 40,
-                            bgcolor: '#667eea',
+                            bgcolor: '#1e40af',
                             fontWeight: 700
                         }}>
                             {adminName.charAt(0)}
@@ -292,6 +300,9 @@ const AdminDashboard = () => {
                     <Route path="/overview" element={<AdminOverview />} />
                     <Route path="/students" element={<AdminStudentManagement />} />
                     <Route path="/teachers" element={<AdminTeacherManagement />} />
+                    <Route path="/special-needs" element={<SpecialNeeds />} />
+                    <Route path="/library" element={<Library />} />
+                    <Route path="/clinic" element={<Clinic />} />
                     <Route path="/classes" element={<AdminAllClasses />} />
                     <Route path="/timetable" element={<AdminTimetable />} />
                     <Route path="/calendar" element={<AdminCalendar />} />
