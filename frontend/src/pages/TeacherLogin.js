@@ -5,7 +5,8 @@ import { Box, Paper, TextField, Button, Typography, Alert, CircularProgress } fr
 import { School } from '@mui/icons-material';
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_BASE_URL || 'http://localhost:5000';
+const API_BASE = process.env.REACT_APP_BASE_URL || 'http://localhost:5001';
+const TEACHER_LOGIN_URL = `${API_BASE}/TeacherLogin`;
 
 const TeacherLogin = () => {
     const [loginData, setLoginData] = useState({ teacherId: '', password: '' });
@@ -20,7 +21,7 @@ const TeacherLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axios.post(API_ENDPOINTS.TEACHER_LOGIN, loginData);
+            const response = await axios.post(TEACHER_LOGIN_URL, loginData);
             
             const teacherId = response.data._id || response.data.id;
             if (teacherId) {
