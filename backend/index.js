@@ -9,7 +9,7 @@ const app = express();
 const Routes = require("./routes/route.js");
 const EnhancedRoutes = require("./routes/enhanced-routes.js");
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Security Middleware
 app.use(helmet());
@@ -48,7 +48,16 @@ app.use('/api/', apiLimiter);
 app.get('/', (req, res) => {
     res.status(200).json({ 
         status: 'OK', 
-        message: 'BIS NOC School Management System API',
+        message: 'BIS NOC School Management System API (Supabase)',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Health Check
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'OK',
+        message: 'BIS NOC School Management System is running on Supabase',
         timestamp: new Date().toISOString()
     });
 });
@@ -66,7 +75,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 BIS NOC School Server running on port ${PORT}`);
+    console.log(`🚀 BIS NOC School Server running on port ${PORT} (Supabase Mode)`);
 });
 
 module.exports = app;
