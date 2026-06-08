@@ -1,309 +1,69 @@
-const bcrypt = require('bcrypt');
-const Student = require('../models/studentSchema');
+const supabase = require('../supabase');
 
-// Transfer Student to Another Class
-const transferStudent = async (req, res) => {
-    try {
-        const { studentId } = req.params;
-        const { toClassId, reason } = req.body;
-        const transferredBy = req.user.id;
-
-        const student = await Student.findById(studentId);
-
-        if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
-        }
-
-        const fromClassId = student.sclassName;
-
-        // Add to transfer history
-        student.transferHistory.push({
-            fromClass: fromClassId,
-            toClass: toClassId,
-            transferredBy,
-            transferredAt: new Date(),
-            reason: reason || 'Class transfer'
-        });
-
-        // Update current class
-        student.sclassName = toClassId;
-
-        await student.save();
-
-        const updatedStudent = await Student.findById(studentId)
-            .populate('sclassName', 'sclassName')
-            .populate('transferHistory.fromClass', 'sclassName')
-            .populate('transferHistory.toClass', 'sclassName')
-            .populate('transferHistory.transferredBy', 'username');
-
-        res.json({
-            message: 'Student transferred successfully',
-            student: updatedStudent
-        });
-    } catch (error) {
-        console.error('Transfer student error:', error);
-        res.status(500).json({ message: 'Error transferring student' });
-    }
+const registerStudentEnhanced = async (req, res) => {
+    const { studentRegister } = require('./student_controller');
+    return studentRegister(req, res);
 };
 
-// Get Transfer History
-const getTransferHistory = async (req, res) => {
-    try {
-        const { studentId } = req.params;
-
-        const student = await Student.findById(studentId)
-            .populate('transferHistory.fromClass', 'sclassName')
-            .populate('transferHistory.toClass', 'sclassName')
-            .populate('transferHistory.transferredBy', 'username')
-            .select('name studentId transferHistory');
-
-        if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
-        }
-
-        res.json({
-            student: {
-                name: student.name,
-                studentId: student.studentId
-            },
-            transferHistory: student.transferHistory
-        });
-    } catch (error) {
-        console.error('Get transfer history error:', error);
-        res.status(500).json({ message: 'Error fetching transfer history' });
-    }
+const getStudentProfile = async (req, res) => {
+    const { getStudentDetail } = require('./student_controller');
+    return getStudentDetail(req, res);
 };
 
-// Update Special Needs Information
 const updateSpecialNeeds = async (req, res) => {
     try {
         const { studentId } = req.params;
-        const { hasSpecialNeeds, category, accommodations, notes } = req.body;
+        const { hasSpecialNeeds, category, notes, accommodations } = req.body;
 
-        const student = await Student.findById(studentId);
+        const { data, error } = await supabase
+            .from('students')
+            .update({
+                has_special_needs: hasSpecialNeeds,
+                special_needs_category: category,
+                special_needs_notes: notes
+            })
+            .eq('id', studentId)
+            .select()
+            .single();
 
-        if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
+        if (error) return res.status(400).json(error);
+
+        if (accommodations) {
+            await supabase.from('student_accommodations').delete().eq('student_id', studentId);
+            const accRecords = accommodations.map(acc => ({ student_id: studentId, accommodation: acc }));
+            await supabase.from('student_accommodations').insert(accRecords);
         }
 
-        student.specialNeeds = {
-            hasSpecialNeeds,
-            category: hasSpecialNeeds ? category : 'none',
-            accommodations: accommodations || [],
-            notes: notes || ''
-        };
-
-        await student.save();
-
-        res.json({
-            message: 'Special needs information updated',
-            student
-        });
+        res.json(data);
     } catch (error) {
-        console.error('Update special needs error:', error);
         res.status(500).json({ message: 'Error updating special needs' });
     }
 };
 
-// Get Students with Special Needs
 const getSpecialNeedsStudents = async (req, res) => {
     try {
-        const { schoolId, classId, category } = req.query;
+        const { data, error } = await supabase
+            .from('students')
+            .select('*, sclasses(sclass_name)')
+            .eq('has_special_needs', true);
 
-        const query = {
-            school: schoolId,
-            'specialNeeds.hasSpecialNeeds': true
-        };
-
-        if (classId) {
-            query.sclassName = classId;
-        }
-
-        if (category) {
-            query['specialNeeds.category'] = category;
-        }
-
-        const students = await Student.find(query)
-            .populate('sclassName', 'sclassName')
-            .select('name studentId rollNum specialNeeds sclassName')
-            .sort({ 'sclassName': 1, rollNum: 1 });
-
-        // Get statistics
-        const stats = {
-            total: students.length,
-            byCategory: {}
-        };
-
-        students.forEach(student => {
-            const cat = student.specialNeeds.category;
-            stats.byCategory[cat] = (stats.byCategory[cat] || 0) + 1;
-        });
-
-        res.json({ students, stats });
+        if (error) return res.status(400).json(error);
+        res.json(data);
     } catch (error) {
-        console.error('Get special needs students error:', error);
         res.status(500).json({ message: 'Error fetching special needs students' });
     }
 };
 
-// Enhanced Student Registration with studentId
-const registerStudentEnhanced = async (req, res) => {
-    try {
-        const {
-            studentId,
-            name,
-            rollNum,
-            password,
-            sclassName,
-            adminID,
-            parentContact,
-            specialNeeds
-        } = req.body;
-
-        // Check if student already exists
-        const existingStudent = await Student.findOne({
-            $or: [
-                { studentId },
-                { rollNum, school: adminID, sclassName }
-            ]
-        });
-
-        if (existingStudent) {
-            return res.status(400).json({
-                message: existingStudent.studentId === studentId
-                    ? 'Student ID already exists'
-                    : 'Roll Number already exists in this class'
-            });
-        }
-
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPass = await bcrypt.hash(password, salt);
-
-        const student = new Student({
-            studentId,
-            name,
-            rollNum,
-            password: hashedPass,
-            sclassName,
-            school: adminID,
-            parentContact: parentContact || {},
-            specialNeeds: specialNeeds || {
-                hasSpecialNeeds: false,
-                category: 'none'
-            },
-            active: true
-        });
-
-        await student.save();
-
-        const studentResponse = student.toObject();
-        delete studentResponse.password;
-
-        res.status(201).json({
-            message: 'Student registered successfully',
-            student: studentResponse
-        });
-    } catch (error) {
-        console.error('Register student error:', error);
-        res.status(500).json({ message: 'Error registering student' });
-    }
-};
-
-// Get Student Profile with Complete Information
-const getStudentProfile = async (req, res) => {
-    try {
-        const { studentId } = req.params;
-
-        const student = await Student.findById(studentId)
-            .populate('school', 'schoolName')
-            .populate('sclassName', 'sclassName')
-            .populate('transferHistory.fromClass', 'sclassName')
-            .populate('transferHistory.toClass', 'sclassName')
-            .populate('transferHistory.transferredBy', 'username')
-            .select('-password');
-
-        if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
-        }
-
-        res.json({ student });
-    } catch (error) {
-        console.error('Get student profile error:', error);
-        res.status(500).json({ message: 'Error fetching student profile' });
-    }
-};
-
-// Bulk Student Import
-const bulkImportStudents = async (req, res) => {
-    try {
-        const { students } = req.body;
-
-        const results = {
-            success: 0,
-            failed: 0,
-            errors: []
-        };
-
-        for (const studentData of students) {
-            try {
-                const existingStudent = await Student.findOne({
-                    $or: [
-                        { studentId: studentData.studentId },
-                        { 
-                            rollNum: studentData.rollNum,
-                            school: studentData.adminID,
-                            sclassName: studentData.sclassName
-                        }
-                    ]
-                });
-
-                if (existingStudent) {
-                    results.failed++;
-                    results.errors.push({
-                        studentId: studentData.studentId,
-                        error: 'Student already exists'
-                    });
-                    continue;
-                }
-
-                const salt = await bcrypt.genSalt(10);
-                const hashedPass = await bcrypt.hash(studentData.password, salt);
-
-                const student = new Student({
-                    ...studentData,
-                    school: studentData.adminID,
-                    password: hashedPass,
-                    active: true
-                });
-
-                await student.save();
-                results.success++;
-            } catch (error) {
-                results.failed++;
-                results.errors.push({
-                    studentId: studentData.studentId,
-                    error: error.message
-                });
-            }
-        }
-
-        res.json({
-            message: 'Bulk import completed',
-            results
-        });
-    } catch (error) {
-        console.error('Bulk import error:', error);
-        res.status(500).json({ message: 'Error during bulk import' });
-    }
-};
+const transferStudent = async (req, res) => res.status(501).json({ message: "Not implemented" });
+const getTransferHistory = async (req, res) => res.status(501).json({ message: "Not implemented" });
+const bulkImportStudents = async (req, res) => res.status(501).json({ message: "Not implemented" });
 
 module.exports = {
-    transferStudent,
-    getTransferHistory,
-    updateSpecialNeeds,
-    getSpecialNeedsStudents,
     registerStudentEnhanced,
     getStudentProfile,
+    updateSpecialNeeds,
+    getSpecialNeedsStudents,
+    transferStudent,
+    getTransferHistory,
     bulkImportStudents
 };

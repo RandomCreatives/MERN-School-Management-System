@@ -468,3 +468,42 @@ src/pages/dashboard/admin/AdminSendMessage.js
   Line 7:32:  'Class' is defined but never used   no-unused-vars
 
 webpack compiled with 1 warning
+Compiling...
+Compiled with warnings.
+
+[eslint]
+src/pages/dashboard/Clinic.js
+  Line 12:49:  'FilterList' is defined but never used         no-unused-vars
+  Line 81:19:  'response' is assigned a value but never used  no-unused-vars
+
+src/pages/dashboard/admin/AdminReports.js
+  Line 2:67:  'Divider' is defined but never used     no-unused-vars
+  Line 3:10:  'Assessment' is defined but never used  no-unused-vars
+
+src/pages/dashboard/admin/AdminSendMessage.js
+  Line 4:48:  'Chip' is defined but never used    no-unused-vars
+  Line 5:14:  'Alert' is defined but never used   no-unused-vars
+  Line 7:16:  'People' is defined but never used  no-unused-vars
+  Line 7:24:  'School' is defined but never used  no-unused-vars
+  Line 7:32:  'Class' is defined but never used   no-unused-vars
+
+Search for the keywords to learn more about each warning.
+To ignore, add // eslint-disable-next-line to the line before.
+
+WARNING in [eslint]
+src/pages/dashboard/Clinic.js
+  Line 12:49:  'FilterList' is defined but never used         no-unused-vars
+  Line 81:19:  'response' is assigned a value but never used  no-unused-vars
+
+src/pages/dashboard/admin/AdminReports.js
+  Line 2:67:  'Divider' is defined but never used     no-unused-vars
+  Line 3:10:  'Assessment' is defined but never used  no-unused-vars
+
+src/pages/dashboard/admin/AdminSendMessage.js
+  Line 4:48:  'Chip' is defined but never used    no-unused-vars
+  Line 5:14:  'Alert' is defined but never used   no-unused-vars
+  Line 7:16:  'People' is defined but never used  no-unused-vars
+  Line 7:24:  'School' is defined but never used  no-unused-vars
+  Line 7:32:  'Class' is defined but never used   no-unused-vars
+
+webpack compiled with 1 warning

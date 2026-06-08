@@ -1,50 +1,47 @@
-const Student = require('../models/studentSchema');
-const Attendance = require('../models/attendanceSchema');
-const Marksheet = require('../models/marksheetSchema');
-const Library = require('../models/librarySchema');
-const Clinic = require('../models/clinicSchema');
+const supabase = require('../supabase');
 
-// Transfer student with complete data migration
 const transferStudentWithData = async (req, res) => {
     try {
         const { studentId } = req.params;
-        const { toClassId, reason, transferDate, migrateData } = req.body;
-        const transferredBy = req.user.id;
+        const { targetClassId, reason, migrateAttendance, migrateMarks, migrateLibrary, migrateClinic } = req.body;
+        const adminId = req.user?.id || req.body.adminId;
 
-        const student = await Student.findById(studentId).populate('sclassName', 'sclassName');
-        if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
-        }
+        const { data: student, error: fetchError } = await supabase
+            .from('students')
+            .select('*')
+            .eq('id', studentId)
+            .single();
 
-        const fromClassId = student.sclassName._id;
-        const transferResults = { student: null, attendance: { updated: 0 }, marksheets: { updated: 0 }, library: { updated: 0 }, clinic: { updated: 0 } };
+        if (fetchError || !student) return res.status(404).json({ message: 'Student not found' });
 
-        student.transferHistory.push({ fromClass: fromClassId, toClass: toClassId, transferredBy, transferredAt: transferDate || new Date(), reason: reason || 'Class transfer' });
-        student.sclassName = toClassId;
-        await student.save();
+        const fromClassId = student.sclass_id;
 
-        if (migrateData?.attendance !== false) {
-            const result = await Attendance.updateMany({ student: studentId, class: fromClassId }, { $set: { class: toClassId } });
-            transferResults.attendance.updated = result.modifiedCount;
-        }
-        if (migrateData?.marksheets !== false) {
-            const result = await Marksheet.updateMany({ student: studentId, class: fromClassId }, { $set: { class: toClassId } });
-            transferResults.marksheets.updated = result.modifiedCount;
-        }
-        if (migrateData?.library !== false) {
-            const result = await Library.updateMany({ student: studentId, class: fromClassId }, { $set: { class: toClassId } });
-            transferResults.library.updated = result.modifiedCount;
-        }
-        if (migrateData?.clinic !== false) {
-            const result = await Clinic.updateMany({ student: studentId, class: fromClassId }, { $set: { class: toClassId } });
-            transferResults.clinic.updated = result.modifiedCount;
-        }
+        const { error: historyError } = await supabase
+            .from('student_transfers')
+            .insert([{
+                student_id: studentId,
+                from_class_id: fromClassId,
+                to_class_id: targetClassId,
+                transferred_by: adminId,
+                reason: reason
+            }]);
 
-        const updatedStudent = await Student.findById(studentId).populate('sclassName', 'sclassName').populate('transferHistory.fromClass', 'sclassName').populate('transferHistory.toClass', 'sclassName').populate('transferHistory.transferredBy', 'username');
+        if (historyError) return res.status(400).json(historyError);
 
-        res.json({ message: 'Student transferred successfully', student: updatedStudent, migratedRecords: { attendance: transferResults.attendance.updated, marksheets: transferResults.marksheets.updated, library: transferResults.library.updated, clinic: transferResults.clinic.updated } });
+        const { error: updateError } = await supabase
+            .from('students')
+            .update({ sclass_id: targetClassId })
+            .eq('id', studentId);
+
+        if (updateError) return res.status(400).json(updateError);
+
+        if (migrateAttendance) await supabase.from('student_attendance').update({ sclass_id: targetClassId }).eq('student_id', studentId);
+        if (migrateMarks) await supabase.from('marksheets').update({ sclass_id: targetClassId }).eq('student_id', studentId);
+        if (migrateLibrary) await supabase.from('library_transactions').update({ sclass_id: targetClassId }).eq('student_id', studentId);
+        if (migrateClinic) await supabase.from('clinic_visits').update({ sclass_id: targetClassId }).eq('student_id', studentId);
+
+        res.json({ message: 'Student transferred successfully' });
     } catch (error) {
-        console.error('Transfer error:', error);
         res.status(500).json({ message: 'Error transferring student' });
     }
 };

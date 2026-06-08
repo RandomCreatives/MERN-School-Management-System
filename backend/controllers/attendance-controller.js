@@ -1,241 +1,70 @@
-const Attendance = require('../models/attendanceSchema');
-const Student = require('../models/studentSchema');
-const Subject = require('../models/subjectSchema');
+const supabase = require('../supabase');
 
-// Mark Attendance (Bulk or Single)
 const markAttendance = async (req, res) => {
     try {
-        const { attendanceRecords, date, classId, attendanceType, subjectId } = req.body;
-        const markedBy = req.user.id;
-        const schoolId = req.user.school;
+        const { attendanceRecords, date, classId, subjectId } = req.body;
+        const schoolId = req.body.schoolId || req.user?.school_id;
 
-        const attendanceData = [];
+        const records = attendanceRecords.map(record => ({
+            student_id: record.studentId,
+            date: date,
+            status: record.status === 'P' || record.status === 'Present' ? 'Present' : 'Absent',
+            subject_id: subjectId,
+            school_id: schoolId
+        }));
 
-        for (const record of attendanceRecords) {
-            const { studentId, status, reason } = record;
+        const { data, error } = await supabase
+            .from('student_attendance')
+            .upsert(records, { onConflict: 'student_id, date, subject_id' })
+            .select();
 
-            // Check if attendance already exists
-            const existingAttendance = await Attendance.findOne({
-                student: studentId,
-                date: new Date(date),
-                class: classId,
-                attendanceType,
-                ...(subjectId && { subject: subjectId })
-            });
-
-            if (existingAttendance) {
-                // Update existing attendance
-                existingAttendance.status = status;
-                existingAttendance.reason = reason || '';
-                existingAttendance.markedBy = markedBy;
-                await existingAttendance.save();
-                attendanceData.push(existingAttendance);
-            } else {
-                // Create new attendance record
-                const attendance = new Attendance({
-                    student: studentId,
-                    date: new Date(date),
-                    status,
-                    reason: reason || '',
-                    markedBy,
-                    subject: subjectId || null,
-                    attendanceType,
-                    class: classId,
-                    school: schoolId
-                });
-                await attendance.save();
-                attendanceData.push(attendance);
-            }
-        }
-
-        res.status(201).json({
-            message: 'Attendance marked successfully',
-            count: attendanceData.length,
-            attendance: attendanceData
-        });
+        if (error) return res.status(400).json(error);
+        res.status(201).json({ message: 'Attendance marked successfully', count: data.length });
     } catch (error) {
-        console.error('Mark attendance error:', error);
         res.status(500).json({ message: 'Error marking attendance' });
     }
 };
 
-// Get Attendance by Class and Date
-const getAttendanceByClassAndDate = async (req, res) => {
+const getStudentAttendance = async (req, res) => {
     try {
-        const { classId, date, attendanceType, subjectId } = req.query;
+        const { data, error } = await supabase
+            .from('student_attendance')
+            .select('*, subjects(sub_name)')
+            .eq('student_id', req.params.studentId);
 
-        const query = {
-            class: classId,
-            date: new Date(date),
-            attendanceType
-        };
-
-        if (subjectId) {
-            query.subject = subjectId;
-        }
-
-        const attendance = await Attendance.find(query)
-            .populate('student', 'name rollNum studentId')
-            .populate('markedBy', 'username')
-            .populate('subject', 'subName')
-            .sort({ 'student.rollNum': 1 });
-
-        res.json({ attendance });
+        if (error) return res.status(400).json(error);
+        res.json({ attendance: data });
     } catch (error) {
-        console.error('Get attendance error:', error);
         res.status(500).json({ message: 'Error fetching attendance' });
     }
 };
 
-// Get Student Attendance History
-const getStudentAttendance = async (req, res) => {
+const getAttendanceByClassAndDate = async (req, res) => {
     try {
-        const { studentId } = req.params;
-        const { startDate, endDate, subjectId } = req.query;
+        const { classId, date, subjectId } = req.query;
+        let query = supabase
+            .from('student_attendance')
+            .select('*, students!inner(name, roll_num)')
+            .eq('date', date)
+            .eq('students.sclass_id', classId);
 
-        const query = { student: studentId };
+        if (subjectId) query = query.eq('subject_id', subjectId);
 
-        if (startDate && endDate) {
-            query.date = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
-        }
-
-        if (subjectId) {
-            query.subject = subjectId;
-        }
-
-        const attendance = await Attendance.find(query)
-            .populate('subject', 'subName')
-            .populate('markedBy', 'username')
-            .sort({ date: -1 });
-
-        // Calculate statistics
-        const stats = {
-            total: attendance.length,
-            present: attendance.filter(a => a.status === 'P').length,
-            late: attendance.filter(a => a.status === 'L').length,
-            absent: attendance.filter(a => a.status === 'A').length,
-            absentWithPermission: attendance.filter(a => a.status === 'AP').length
-        };
-
-        stats.attendancePercentage = stats.total > 0 
-            ? ((stats.present + stats.late) / stats.total * 100).toFixed(2)
-            : 0;
-
-        res.json({ attendance, stats });
+        const { data, error } = await query;
+        if (error) return res.status(400).json(error);
+        res.json({ attendance: data });
     } catch (error) {
-        console.error('Get student attendance error:', error);
-        res.status(500).json({ message: 'Error fetching student attendance' });
+        res.status(500).json({ message: 'Error fetching attendance' });
     }
 };
 
-// Get Attendance Analytics
-const getAttendanceAnalytics = async (req, res) => {
-    try {
-        const { classId, startDate, endDate, schoolId } = req.query;
-
-        const matchQuery = {
-            school: schoolId,
-            date: {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            }
-        };
-
-        if (classId) {
-            matchQuery.class = classId;
-        }
-
-        // Daily distribution
-        const dailyStats = await Attendance.aggregate([
-            { $match: matchQuery },
-            {
-                $group: {
-                    _id: {
-                        date: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
-                        status: '$status'
-                    },
-                    count: { $sum: 1 }
-                }
-            },
-            { $sort: { '_id.date': 1 } }
-        ]);
-
-        // Class-wise comparison
-        const classStats = await Attendance.aggregate([
-            { $match: matchQuery },
-            {
-                $group: {
-                    _id: {
-                        class: '$class',
-                        status: '$status'
-                    },
-                    count: { $sum: 1 }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'sclasses',
-                    localField: '_id.class',
-                    foreignField: '_id',
-                    as: 'classInfo'
-                }
-            }
-        ]);
-
-        // Absence reasons breakdown
-        const reasonStats = await Attendance.aggregate([
-            { 
-                $match: { 
-                    ...matchQuery,
-                    status: { $in: ['A', 'AP'] },
-                    reason: { $exists: true, $ne: '' }
-                } 
-            },
-            {
-                $group: {
-                    _id: '$reason',
-                    count: { $sum: 1 }
-                }
-            },
-            { $sort: { count: -1 } }
-        ]);
-
-        res.json({
-            dailyStats,
-            classStats,
-            reasonStats
-        });
-    } catch (error) {
-        console.error('Get attendance analytics error:', error);
-        res.status(500).json({ message: 'Error fetching attendance analytics' });
-    }
-};
-
-// Delete Attendance Record
-const deleteAttendance = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const attendance = await Attendance.findByIdAndDelete(id);
-
-        if (!attendance) {
-            return res.status(404).json({ message: 'Attendance record not found' });
-        }
-
-        res.json({ message: 'Attendance record deleted successfully' });
-    } catch (error) {
-        console.error('Delete attendance error:', error);
-        res.status(500).json({ message: 'Error deleting attendance' });
-    }
-};
+const getAttendanceAnalytics = async (req, res) => res.status(501).json({ message: "Not implemented" });
+const deleteAttendance = async (req, res) => res.status(501).json({ message: "Not implemented" });
 
 module.exports = {
     markAttendance,
-    getAttendanceByClassAndDate,
     getStudentAttendance,
+    getAttendanceByClassAndDate,
     getAttendanceAnalytics,
     deleteAttendance
 };

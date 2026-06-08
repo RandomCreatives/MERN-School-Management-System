@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const { helmet, apiLimiter, sanitizeInput } = require("./middleware/security");
 
@@ -23,13 +22,11 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
         if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(allowed => origin.includes(allowed))) {
             callback(null, true);
         } else {
-            callback(null, true); // Allow all for now, can restrict later
+            callback(null, true);
         }
     },
     credentials: true,
@@ -47,69 +44,29 @@ app.use(sanitizeInput);
 // Rate Limiting
 app.use('/api/', apiLimiter);
 
-// MongoDB Connection
-mongoose
-    .connect(process.env.MONGO_URL, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-    })
-    .then(() => {
-        console.log("✅ Connected to MongoDB - BIS NOC School System");
-    })
-    .catch((err) => {
-        console.log("❌ MongoDB Connection Error:", err);
-        process.exit(1);
-    });
-
 // Root route
 app.get('/', (req, res) => {
     res.status(200).json({ 
         status: 'OK', 
         message: 'BIS NOC School Management System API',
-        timestamp: new Date().toISOString(),
-        endpoints: {
-            health: '/health',
-            admin: '/AdminLogin, /AdminReg',
-            students: '/Students/all, /StudentReg, /StudentLogin',
-            teachers: '/AllTeachers, /TeacherReg, /TeacherLogin'
-        }
-    });
-});
-
-// Health Check Endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'OK', 
-        message: 'BIS NOC School Management System is running',
         timestamp: new Date().toISOString()
     });
 });
 
 // Routes
 app.use('/', Routes);
-app.use('/api', EnhancedRoutes); // New enhanced API routes
-
-// 404 Handler
-app.use((req, res) => {
-    res.status(404).json({ message: 'Route not found' });
-});
+app.use('/api', EnhancedRoutes);
 
 // Error Handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(err.status || 500).json({
-        message: err.message || 'Internal Server Error',
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+        message: err.message || 'Internal Server Error'
     });
 });
 
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`🚀 BIS NOC School Server running on port ${PORT}`);
-        console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-    });
-}
+app.listen(PORT, () => {
+    console.log(`🚀 BIS NOC School Server running on port ${PORT}`);
+});
 
-// Export for Vercel serverless
 module.exports = app;
