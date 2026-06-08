@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Paper, TextField, Button, Typography, Alert } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import { Box, Paper, TextField, Button, Typography, Alert, CircularProgress } from '@mui/material';
 import { School } from '@mui/icons-material';
 import axios from 'axios';
-import { API_ENDPOINTS } from '../config/api';
+
+const API_BASE = process.env.REACT_APP_BASE_URL || 'http://localhost:5000';
 
 const TeacherLogin = () => {
     const [loginData, setLoginData] = useState({ teacherId: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const dispatch = useDispatch();
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -17,17 +20,29 @@ const TeacherLogin = () => {
         setLoading(true);
 
         try {
-            const response = await axios.post(API_ENDPOINTS.TEACHER_LOGIN, loginData);
-            
+            // Use the existing TeacherLogin endpoint - it accepts email or teacherId
+            const response = await axios.post(`${API_BASE}/TeacherLogin`, {
+                email: loginData.teacherId, // backend checks both email and teacherId
+                password: loginData.password
+            });
+
             if (response.data._id) {
+                const teacherData = response.data;
+
+                // Store in localStorage for persistence
                 localStorage.setItem('teacherAccess', 'authenticated');
-                localStorage.setItem('teacherId', response.data._id);
-                localStorage.setItem('teacherName', response.data.name);
-                localStorage.setItem('teacherEmail', response.data.email);
-                localStorage.setItem('teacherRole', response.data.role);
+                localStorage.setItem('teacherId', teacherData._id);
+                localStorage.setItem('teacherName', teacherData.name);
+                localStorage.setItem('teacherEmail', teacherData.email);
+                localStorage.setItem('teacherRole', teacherData.role || 'Teacher');
+                localStorage.setItem('teacherData', JSON.stringify(teacherData));
+
+                // Also store in the Redux user store for compatibility
+                localStorage.setItem('user', JSON.stringify(teacherData));
+
                 navigate('/teacher-portal/home');
             } else {
-                setError(response.data.message || 'Login failed');
+                setError(response.data.message || 'Login failed. Please check your credentials.');
             }
         } catch (err) {
             setError('Login failed. Please check your credentials.');
@@ -53,7 +68,7 @@ const TeacherLogin = () => {
                         Teacher Portal
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#6b7280', mt: 1 }}>
-                        British International School - NOC Gerji Campus
+                        School Management System
                     </Typography>
                 </Box>
 
@@ -62,12 +77,12 @@ const TeacherLogin = () => {
                     <form onSubmit={handleLogin}>
                         <TextField
                             fullWidth
-                            label="Teacher ID"
+                            label="Email or Teacher ID"
                             value={loginData.teacherId}
                             onChange={(e) => setLoginData({ ...loginData, teacherId: e.target.value })}
                             sx={{ mb: 2 }}
                             required
-                            helperText="Use your assigned Teacher ID (e.g., TCH001)"
+                            helperText="Use your email address or Teacher ID (e.g., TCH001)"
                         />
                         <TextField
                             fullWidth
@@ -91,7 +106,7 @@ const TeacherLogin = () => {
                                 fontWeight: 600
                             }}
                         >
-                            {loading ? 'Logging in...' : 'Login'}
+                            {loading ? <CircularProgress size={24} color="inherit" /> : 'Login'}
                         </Button>
                     </form>
 

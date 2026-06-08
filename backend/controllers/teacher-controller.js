@@ -259,8 +259,14 @@ const teacherAttendance = async (req, res) => {
 const updateTeacher = async (req, res) => {
     try {
         const teacherId = req.params.id;
-        const updateData = req.body;
-        
+        const updateData = { ...req.body };
+
+        // If password is being updated, hash it first
+        if (updateData.password) {
+            const salt = await bcrypt.genSalt(10);
+            updateData.password = await bcrypt.hash(updateData.password, salt);
+        }
+
         const updatedTeacher = await Teacher.findByIdAndUpdate(
             teacherId,
             updateData,
@@ -269,12 +275,16 @@ const updateTeacher = async (req, res) => {
          .populate('primarySubject', 'subName subCode')
          .populate('teachClasses', 'sclassName')
          .populate('teachSubjects.subject', 'subName subCode')
-         .populate('teachSubjects.classes', 'sclassName');
+         .populate('teachSubjects.classes', 'sclassName')
+         .populate('teachSubject', 'subName sessions')
+         .populate('teachSclass', 'sclassName')
+         .populate('school', 'schoolName');
 
         if (!updatedTeacher) {
             return res.status(404).json({ message: 'Teacher not found' });
         }
 
+        updatedTeacher.password = undefined;
         res.send(updatedTeacher);
     } catch (error) {
         console.error('Update teacher error:', error);
