@@ -34,13 +34,14 @@ const AdminLogin = () => {
         try {
             const response = await axios.post(API_ENDPOINTS.ADMIN_LOGIN, loginData);
             
-            if (response.data._id) {
+            const adminId = response.data._id || response.data.id;
+            if (adminId) {
                 // Successful login
                 localStorage.setItem('adminAccess', 'authenticated');
-                localStorage.setItem('adminId', response.data._id);
+                localStorage.setItem('adminId', adminId);
                 localStorage.setItem('adminName', response.data.name);
                 localStorage.setItem('adminEmail', response.data.email);
-                localStorage.setItem('schoolName', response.data.schoolName);
+                localStorage.setItem('schoolName', response.data.school_name || response.data.schoolName);
                 navigate('/admin-dashboard/home');
             } else {
                 setError(response.data.message || 'Login failed');
@@ -66,7 +67,8 @@ const AdminLogin = () => {
                 role: 'Admin'
             });
             
-            if (response.data._id) {
+            const registrationId = response.data._id || response.data.id;
+            if (registrationId) {
                 // Successful registration
                 setSuccess('Registration successful! Please login.');
                 setSignupData({ name: '', email: '', password: '', schoolName: '' });

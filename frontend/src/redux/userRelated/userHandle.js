@@ -20,10 +20,17 @@ export const loginUser = (fields, role) => async (dispatch) => {
         const result = await axios.post(`${process.env.REACT_APP_BASE_URL}/${role}Login`, fields, {
             headers: { 'Content-Type': 'application/json' },
         });
-        if (result.data.role) {
-            dispatch(authSuccess(result.data));
+        // Support both MongoDB (_id) and Supabase (id) response shapes
+        const data = result.data;
+        const hasId = data._id || data.id;
+        if (data.role || hasId) {
+            // Normalize id field for downstream use
+            if (!data._id && data.id) data._id = data.id;
+            // Normalize school_name -> schoolName for Admin
+            if (!data.schoolName && data.school_name) data.schoolName = data.school_name;
+            dispatch(authSuccess(data));
         } else {
-            dispatch(authFailed(result.data.message));
+            dispatch(authFailed(data.message));
         }
     } catch (error) {
         dispatch(authError(error));
@@ -37,14 +44,15 @@ export const registerUser = (fields, role) => async (dispatch) => {
         const result = await axios.post(`${process.env.REACT_APP_BASE_URL}/${role}Reg`, fields, {
             headers: { 'Content-Type': 'application/json' },
         });
-        if (result.data.schoolName) {
-            dispatch(authSuccess(result.data));
-        }
-        else if (result.data.school) {
+        const data = result.data;
+        // Support both MongoDB and Supabase response shapes
+        if (!data.schoolName && data.school_name) data.schoolName = data.school_name;
+        if (data.schoolName) {
+            dispatch(authSuccess(data));
+        } else if (data.school || data.school_id) {
             dispatch(stuffAdded());
-        }
-        else {
-            dispatch(authFailed(result.data.message));
+        } else {
+            dispatch(authFailed(data.message));
         }
     } catch (error) {
         dispatch(authError(error));

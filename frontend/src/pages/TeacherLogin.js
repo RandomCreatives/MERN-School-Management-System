@@ -19,9 +19,10 @@ const TeacherLogin = () => {
         try {
             const response = await axios.post(API_ENDPOINTS.TEACHER_LOGIN, loginData);
             
-            if (response.data._id) {
+            const teacherId = response.data._id || response.data.id;
+            if (teacherId) {
                 localStorage.setItem('teacherAccess', 'authenticated');
-                localStorage.setItem('teacherId', response.data._id);
+                localStorage.setItem('teacherId', teacherId);
                 localStorage.setItem('teacherName', response.data.name);
                 localStorage.setItem('teacherEmail', response.data.email);
                 localStorage.setItem('teacherRole', response.data.role);
