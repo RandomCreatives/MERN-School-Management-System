@@ -64,27 +64,50 @@ const teacherRegister = async (req, res) => {
 const teacherLogIn = async (req, res) => {
     try {
         const loginField = req.body.email || req.body.teacherId;
+        const password = req.body.password;
 
-        const { data: teachers, error } = await supabase
+        if (!loginField || !password) {
+            return res.send({ message: 'Credentials are required' });
+        }
+
+        // Try email first, then teacher_id
+        let teacher = null;
+
+        const { data: byEmail } = await supabase
             .from('teachers')
-            .select(`*, subjects(sub_name, sessions), sclasses(sclass_name), admins(school_name)`)
-            .or(`email.eq.${loginField},teacher_id.eq.${loginField}`)
+            .select('*')
+            .eq('email', loginField)
             .limit(1);
 
-        if (error || !teachers || teachers.length === 0) {
+        if (byEmail && byEmail.length > 0) {
+            teacher = byEmail[0];
+        } else {
+            const { data: byId } = await supabase
+                .from('teachers')
+                .select('*')
+                .eq('teacher_id', loginField)
+                .limit(1);
+
+            if (byId && byId.length > 0) {
+                teacher = byId[0];
+            }
+        }
+
+        if (!teacher) {
             return res.send({ message: 'Teacher not found' });
         }
 
-        const teacher = teachers[0];
-        const validated = await bcrypt.compare(req.body.password, teacher.password);
-
+        const validated = await bcrypt.compare(password, teacher.password);
         if (!validated) {
             return res.send({ message: 'Invalid password' });
         }
 
-        res.send({ ...teacher, password: undefined });
+        // Fetch related data separately if needed
+        const result = { ...teacher, password: undefined };
+        res.send(result);
     } catch (err) {
-        res.status(500).json(err);
+        console.error('Teacher login error:', err);
+        res.status(500).json({ message: err.message });
     }
 };
 
