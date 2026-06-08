@@ -36,4 +36,47 @@ const complainList = async (req, res) => {
     }
 };
 
-module.exports = { complainCreate, complainList };
+const complainReply = async (req, res) => {
+    try {
+        const { reply, status } = req.body;
+        const result = await Complain.findByIdAndUpdate(
+            req.params.id,
+            {
+                reply,
+                status: status || 'reviewed',
+                repliedAt: new Date()
+            },
+            { new: true }
+        ).populate("user", "name email");
+
+        if (!result) {
+            return res.status(404).json({ message: 'Complaint not found' });
+        }
+        res.send(result);
+    } catch (err) {
+        res.status(500).json(err);
+    }
+};
+
+const complainDelete = async (req, res) => {
+    try {
+        const result = await Complain.findByIdAndDelete(req.params.id);
+        if (!result) {
+            return res.status(404).json({ message: 'Complaint not found' });
+        }
+        res.send(result);
+    } catch (err) {
+        res.status(500).json(err);
+    }
+};
+
+const complainDeleteAll = async (req, res) => {
+    try {
+        const result = await Complain.deleteMany({ school: req.params.id });
+        res.send(result);
+    } catch (err) {
+        res.status(500).json(err);
+    }
+};
+
+module.exports = { complainCreate, complainList, complainReply, complainDelete, complainDeleteAll };

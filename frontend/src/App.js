@@ -34,9 +34,10 @@ const App = () => {
         {/* Admin Dashboard - New Structure */}
         <Route path="/admin-dashboard/*" element={<AdminDashboard />} />
         
-        {/* Teacher Portal */}
+        {/* Teacher Portal - Single Unified Dashboard */}
         <Route path="/teacher-portal/*" element={<TeacherPortalDashboard />} />
-        <Route path="/teacher/dashboard/*" element={<TeacherPortalDashboard />} />
+        {/* Redirect old teacher routes to the unified portal */}
+        <Route path="/teacher/dashboard/*" element={<Navigate to="/teacher-portal/home" />} />
         
         {/* Student Dashboard */}
         <Route path="/student/dashboard" element={<StudentDashboard />} />

@@ -1,12 +1,11 @@
-import { Box, Typography, Grid, Paper, Card, CardContent, Button, Chip, Avatar, LinearProgress } from '@mui/material';
-import { 
-    Assignment, CheckCircle, Message, TrendingUp, Schedule, 
-    Add, Grade, People, CalendarToday 
-} from '@mui/icons-material';
+import { Box, Typography, Grid, Card, CardContent, Paper, Avatar, Chip, LinearProgress, CircularProgress } from '@mui/material';
+import { People, Assignment, CheckCircle, Schedule, Grade, Class } from '@mui/icons-material';
+import useTeacherData from '../useTeacherData';
 
 const TeacherHome = () => {
-    const teacherName = localStorage.getItem('teacherName') || 'Teacher';
-    
+    const { teacher, students, subjects, classInfo, loading } = useTeacherData();
+    const teacherName = teacher?.name || localStorage.getItem('teacherName') || 'Teacher';
+
     const getGreeting = () => {
         const hour = new Date().getHours();
         if (hour < 12) return 'Good Morning';
@@ -14,80 +13,94 @@ const TeacherHome = () => {
         return 'Good Evening';
     };
 
-    // Quick Stats
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+                <CircularProgress sx={{ color: '#059669' }} />
+            </Box>
+        );
+    }
+
+    const subjectName = teacher?.teachSubject?.subName || 'N/A';
+    const totalSessions = teacher?.teachSubject?.sessions || 0;
+
+    // Calculate attendance stats from students
+    let totalPresent = 0;
+    let totalRecords = 0;
+    students.forEach(s => {
+        if (s.attendance) {
+            s.attendance.forEach(a => {
+                totalRecords++;
+                if (a.status === 'Present') totalPresent++;
+            });
+        }
+    });
+    const attendanceRate = totalRecords > 0 ? Math.round((totalPresent / totalRecords) * 100) : 0;
+
     const stats = [
-        { title: 'Classes Today', value: '4', icon: <Schedule />, color: '#f093fb', bg: '#fef0ff' },
-        { title: 'Pending Grades', value: '12', icon: <Grade />, color: '#4facfe', bg: '#f0f9ff' },
-        { title: 'Unread Messages', value: '3', icon: <Message />, color: '#43e97b', bg: '#f0fdf4' },
-        { title: 'Attendance Due', value: '2', icon: <CheckCircle />, color: '#fa709a', bg: '#fff0f5' },
-    ];
-
-    // Today's Schedule
-    const todaySchedule = [
-        { time: '08:00 - 09:00', subject: 'Mathematics', class: 'Grade 10A', room: 'Room 201', status: 'completed' },
-        { time: '09:15 - 10:15', subject: 'Mathematics', class: 'Grade 10B', room: 'Room 201', status: 'completed' },
-        { time: '10:30 - 11:30', subject: 'Algebra', class: 'Grade 11A', room: 'Room 201', status: 'current' },
-        { time: '12:00 - 13:00', subject: 'Free Period', class: '-', room: '-', status: 'upcoming' },
-        { time: '13:30 - 14:30', subject: 'Mathematics', class: 'Grade 9A', room: 'Room 201', status: 'upcoming' },
-    ];
-
-    // Quick Actions
-    const quickActions = [
-        { title: 'Create Assignment', icon: <Assignment />, color: '#667eea' },
-        { title: 'Take Attendance', icon: <CheckCircle />, color: '#43e97b' },
-        { title: 'Enter Grades', icon: <Grade />, color: '#4facfe' },
-        { title: 'Message Parents', icon: <Message />, color: '#f093fb' },
-        { title: 'Upload Resource', icon: <Add />, color: '#fa709a' },
-        { title: 'Plan Lesson', icon: <Schedule />, color: '#feca57' },
-    ];
-
-    // Recent Activity
-    const recentActivity = [
-        { student: 'John Doe', action: 'Submitted Assignment', subject: 'Math Quiz 5', time: '10 mins ago' },
-        { student: 'Jane Smith', action: 'Submitted Assignment', subject: 'Math Quiz 5', time: '25 mins ago' },
-        { student: 'Mike Johnson', action: 'Absent', subject: 'Grade 10A', time: '1 hour ago' },
+        { title: 'Class Students', value: students.length, icon: <People />, color: '#3b82f6', bg: '#eff6ff' },
+        { title: 'Subjects', value: subjects.length, icon: <Assignment />, color: '#10b981', bg: '#ecfdf5' },
+        { title: 'Total Sessions', value: totalSessions, icon: <Schedule />, color: '#f59e0b', bg: '#fffbeb' },
+        { title: 'Attendance Rate', value: `${attendanceRate}%`, icon: <CheckCircle />, color: '#8b5cf6', bg: '#f5f3ff' },
     ];
 
     return (
         <Box>
-            {/* Welcome Header */}
+            {/* Welcome */}
             <Box sx={{ mb: 4 }}>
                 <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-                    {getGreeting()}, {teacherName}! 👋
+                    {getGreeting()}, {teacherName.split(' ')[0]}! 👋
                 </Typography>
                 <Typography variant="body1" sx={{ color: '#666' }}>
-                    Here's what's happening with your classes today
+                    Here's an overview of your class and teaching activity.
                 </Typography>
             </Box>
 
-            {/* Quick Stats */}
+            {/* Info Card */}
+            <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', color: 'white' }}>
+                <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                        <Avatar sx={{ width: 56, height: 56, bgcolor: 'rgba(255,255,255,0.2)', fontWeight: 700, fontSize: '1.5rem' }}>
+                            {teacherName.charAt(0)}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography variant="h5" sx={{ fontWeight: 600 }}>{teacherName}</Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                                <Chip label={classInfo?.sclassName || 'No Class'} size="small"
+                                    sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+                                    icon={<Class sx={{ color: '#fff !important' }} />} />
+                                <Chip label={subjectName} size="small"
+                                    sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+                                    icon={<Grade sx={{ color: '#fff !important' }} />} />
+                            </Box>
+                        </Box>
+                        <Box sx={{ textAlign: 'right', display: { xs: 'none', md: 'block' } }}>
+                            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                                {teacher?.school?.schoolName || 'School'}
+                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                                Teacher ID: {teacher?.teacherId || 'N/A'}
+                            </Typography>
+                        </Box>
+                    </Box>
+                </CardContent>
+            </Card>
+
+            {/* Stats */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-                {stats.map((stat, index) => (
-                    <Grid item xs={12} sm={6} md={3} key={index}>
-                        <Card sx={{ borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                            <CardContent>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                    <Box sx={{
-                                        width: 60,
-                                        height: 60,
-                                        borderRadius: '12px',
-                                        bgcolor: stat.bg,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: stat.color
-                                    }}>
-                                        {stat.icon}
-                                    </Box>
-                                    <Box>
-                                        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                                            {stat.value}
-                                        </Typography>
-                                        <Typography variant="body2" sx={{ color: '#666' }}>
-                                            {stat.title}
-                                        </Typography>
-                                    </Box>
-                                </Box>
+                {stats.map((stat, i) => (
+                    <Grid item xs={6} md={3} key={i}>
+                        <Card sx={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                                <Box sx={{
+                                    width: 48, height: 48, borderRadius: '12px', bgcolor: stat.bg,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: stat.color, mx: 'auto', mb: 1.5
+                                }}>{stat.icon}</Box>
+                                <Typography variant="h4" sx={{ fontWeight: 700, color: '#1f2937' }}>
+                                    {stat.value}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#6b7280' }}>{stat.title}</Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -95,147 +108,72 @@ const TeacherHome = () => {
             </Grid>
 
             <Grid container spacing={3}>
-                {/* Today's Schedule */}
-                <Grid item xs={12} md={8}>
-                    <Paper sx={{ p: 3, borderRadius: '16px', mb: 3 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                Today's Schedule
-                            </Typography>
-                            <Chip label={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} />
-                        </Box>
-                        
-                        {todaySchedule.map((period, index) => (
-                            <Box 
-                                key={index}
-                                sx={{ 
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    p: 2,
-                                    mb: 2,
-                                    borderRadius: '12px',
-                                    bgcolor: period.status === 'current' ? '#fef3c7' : '#f9fafb',
-                                    border: period.status === 'current' ? '2px solid #f59e0b' : '1px solid #f0f0f0'
-                                }}
-                            >
-                                <Box sx={{ flex: 1 }}>
-                                    <Typography variant="body2" sx={{ color: '#666', mb: 0.5 }}>
-                                        {period.time}
-                                    </Typography>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                        {period.subject}
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ color: '#666' }}>
-                                        {period.class} • {period.room}
-                                    </Typography>
-                                </Box>
-                                {period.status === 'current' && (
-                                    <Chip label="Current" color="warning" size="small" />
-                                )}
-                                {period.status === 'completed' && (
-                                    <CheckCircle sx={{ color: '#10b981' }} />
-                                )}
-                                {period.status === 'upcoming' && period.subject !== 'Free Period' && (
-                                    <Button size="small" variant="outlined" sx={{ textTransform: 'none' }}>
-                                        View Class
-                                    </Button>
-                                )}
-                            </Box>
-                        ))}
-                    </Paper>
-
-                    {/* Quick Actions */}
-                    <Paper sx={{ p: 3, borderRadius: '16px' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                            Quick Actions
+                {/* Students Overview */}
+                <Grid item xs={12} md={7}>
+                    <Paper sx={{ p: 3, borderRadius: '12px' }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                            Class Students ({students.length})
                         </Typography>
-                        <Grid container spacing={2}>
-                            {quickActions.map((action, index) => (
-                                <Grid item xs={6} sm={4} key={index}>
-                                    <Button
-                                        fullWidth
-                                        variant="outlined"
-                                        sx={{
-                                            p: 2,
-                                            borderRadius: '12px',
-                                            borderColor: '#f0f0f0',
-                                            color: action.color,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: 1,
-                                            textTransform: 'none',
-                                            '&:hover': {
-                                                borderColor: action.color,
-                                                bgcolor: `${action.color}10`
-                                            }
-                                        }}
-                                    >
-                                        {action.icon}
-                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                            {action.title}
-                                        </Typography>
-                                    </Button>
-                                </Grid>
-                            ))}
-                        </Grid>
-                    </Paper>
-                </Grid>
-
-                {/* Sidebar */}
-                <Grid item xs={12} md={4}>
-                    {/* Recent Activity */}
-                    <Paper sx={{ p: 3, borderRadius: '16px', mb: 3 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                            Recent Activity
-                        </Typography>
-                        {recentActivity.map((activity, index) => (
-                            <Box key={index} sx={{ mb: 2, pb: 2, borderBottom: index < recentActivity.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                                    <Avatar sx={{ width: 32, height: 32, bgcolor: '#f093fb' }}>
-                                        {activity.student.charAt(0)}
+                        {students.length === 0 ? (
+                            <Typography variant="body2" sx={{ color: '#9ca3af' }}>No students in this class yet.</Typography>
+                        ) : (
+                            students.slice(0, 8).map((student, i) => (
+                                <Box key={student._id || i} sx={{
+                                    display: 'flex', alignItems: 'center', py: 1.5,
+                                    borderBottom: i < Math.min(students.length, 8) - 1 ? '1px solid #f3f4f6' : 'none'
+                                }}>
+                                    <Avatar sx={{ width: 32, height: 32, bgcolor: '#059669', fontSize: '0.8rem', mr: 2 }}>
+                                        {student.name?.charAt(0)}
                                     </Avatar>
                                     <Box sx={{ flex: 1 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                            {activity.student}
-                                        </Typography>
-                                        <Typography variant="caption" sx={{ color: '#666' }}>
-                                            {activity.action}
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{student.name}</Typography>
+                                        <Typography variant="caption" sx={{ color: '#9ca3af' }}>
+                                            Roll: {student.rollNum} {student.studentId ? `• ID: ${student.studentId}` : ''}
                                         </Typography>
                                     </Box>
                                 </Box>
-                                <Typography variant="caption" sx={{ color: '#999' }}>
-                                    {activity.subject} • {activity.time}
-                                </Typography>
-                            </Box>
-                        ))}
+                            ))
+                        )}
+                        {students.length > 8 && (
+                            <Typography variant="body2" sx={{ color: '#059669', mt: 1, fontWeight: 600 }}>
+                                + {students.length - 8} more students
+                            </Typography>
+                        )}
                     </Paper>
+                </Grid>
 
-                    {/* Class Performance */}
-                    <Paper sx={{ p: 3, borderRadius: '16px' }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                            Class Performance
+                {/* Subjects */}
+                <Grid item xs={12} md={5}>
+                    <Paper sx={{ p: 3, borderRadius: '12px' }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                            Class Subjects
                         </Typography>
-                        <Box sx={{ mb: 3 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography variant="body2">Grade 10A</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>85%</Typography>
-                            </Box>
-                            <LinearProgress variant="determinate" value={85} sx={{ height: 8, borderRadius: 4 }} />
-                        </Box>
-                        <Box sx={{ mb: 3 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography variant="body2">Grade 10B</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>78%</Typography>
-                            </Box>
-                            <LinearProgress variant="determinate" value={78} sx={{ height: 8, borderRadius: 4 }} />
-                        </Box>
-                        <Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography variant="body2">Grade 11A</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>92%</Typography>
-                            </Box>
-                            <LinearProgress variant="determinate" value={92} sx={{ height: 8, borderRadius: 4 }} />
-                        </Box>
+                        {subjects.length === 0 ? (
+                            <Typography variant="body2" sx={{ color: '#9ca3af' }}>No subjects assigned yet.</Typography>
+                        ) : (
+                            subjects.map((sub, i) => (
+                                <Box key={sub._id || i} sx={{ mb: 2 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                            {sub.subName}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ color: '#6b7280' }}>
+                                            {sub.sessions} sessions
+                                        </Typography>
+                                    </Box>
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={Math.min(100, (parseInt(sub.sessions) || 0) * 3)}
+                                        sx={{ height: 6, borderRadius: 3, bgcolor: '#f3f4f6',
+                                            '& .MuiLinearProgress-bar': { bgcolor: '#059669', borderRadius: 3 }
+                                        }}
+                                    />
+                                    <Typography variant="caption" sx={{ color: '#9ca3af' }}>
+                                        Code: {sub.subCode}
+                                    </Typography>
+                                </Box>
+                            ))
+                        )}
                     </Paper>
                 </Grid>
             </Grid>

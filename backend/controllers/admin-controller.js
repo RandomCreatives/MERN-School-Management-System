@@ -46,7 +46,6 @@ const adminRegister = async (req, res) => {
         console.log('✅ Admin registered successfully:', admin.email);
         res.send(result);
     } catch (err) {
-        console.error('❌ Admin registration error:', err);
         res.status(500).json(err);
     }
 };
