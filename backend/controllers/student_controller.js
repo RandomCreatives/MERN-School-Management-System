@@ -1,42 +1,50 @@
 const bcrypt = require('bcrypt');
-const Student = require('../models/studentSchema.js');
-const Subject = require('../models/subjectSchema.js');
+const supabase = require('../supabaseClient');
 
 const studentRegister = async (req, res) => {
     try {
         console.log('📝 Student registration request:', req.body.name);
-        
+
         const salt = await bcrypt.genSalt(10);
         const hashedPass = await bcrypt.hash(req.body.password, salt);
 
-        const existingStudent = await Student.findOne({
-            rollNum: req.body.rollNum,
-            school: req.body.adminID,
-            sclassName: req.body.sclassName,
-        });
+        const { data: existing } = await supabase
+            .from('students')
+            .select('id')
+            .eq('roll_num', req.body.rollNum)
+            .eq('school_id', req.body.adminID)
+            .eq('sclass_id', req.body.sclassName)
+            .single();
 
-        if (existingStudent) {
-            console.log('❌ Roll number already exists');
+        if (existing) {
             return res.send({ message: 'Roll Number already exists' });
         }
 
-        // Generate studentId if not provided
-        const studentId = req.body.studentId || `BIS${new Date().getFullYear()}${String(req.body.rollNum).padStart(4, '0')}`;
+        const studentId = req.body.studentId ||
+            `BIS${new Date().getFullYear()}${String(req.body.rollNum).padStart(4, '0')}`;
 
-        const student = new Student({
-            ...req.body,
-            studentId,
-            school: req.body.adminID,
-            password: hashedPass,
-            active: true
-        });
+        const { data: student, error } = await supabase
+            .from('students')
+            .insert([{
+                student_id: studentId,
+                name: req.body.name,
+                roll_num: req.body.rollNum,
+                password: hashedPass,
+                sclass_id: req.body.sclassName,
+                school_id: req.body.adminID,
+                role: 'Student',
+                active: true
+            }])
+            .select(`*, sclasses(sclass_name), admins(school_name)`)
+            .single();
 
-        console.log('💾 Saving student to database...');
-        let result = await student.save();
+        if (error) {
+            console.error('❌ Student registration error:', error);
+            return res.status(500).json({ message: error.message });
+        }
 
-        result.password = undefined;
-        console.log('✅ Student registered successfully:', result.name);
-        res.send(result);
+        console.log('✅ Student registered successfully:', student.name);
+        res.send({ ...student, password: undefined });
     } catch (err) {
         console.error('❌ Student registration error:', err);
         res.status(500).json(err);
@@ -46,46 +54,33 @@ const studentRegister = async (req, res) => {
 const studentLogIn = async (req, res) => {
     try {
         console.log('🔐 Student login attempt:', req.body);
-        
-        // Support login with studentId or rollNum
-        let student;
-        
+
+        let query = supabase
+            .from('students')
+            .select(`*, sclasses(sclass_name), admins(school_name)`);
+
         if (req.body.studentId) {
-            // Login with studentId (e.g., "Blue001")
-            student = await Student.findOne({ studentId: req.body.studentId });
-        } else if (req.body.rollNum && req.body.studentName) {
-            // Legacy login with rollNum and name
-            student = await Student.findOne({ 
-                rollNum: req.body.rollNum, 
-                name: req.body.studentName 
-            });
+            query = query.eq('student_id', req.body.studentId);
         } else if (req.body.rollNum) {
-            // Try rollNum as number
-            const rollNumAsNumber = parseInt(req.body.rollNum);
-            if (!isNaN(rollNumAsNumber)) {
-                student = await Student.findOne({ rollNum: rollNumAsNumber });
-            }
-        }
-        
-        if (student) {
-            console.log('✅ Student found:', student.name);
-            const validated = await bcrypt.compare(req.body.password, student.password);
-            if (validated) {
-                console.log('✅ Password validated');
-                student = await student.populate("school", "schoolName")
-                student = await student.populate("sclassName", "sclassName")
-                student.password = undefined;
-                student.examResult = undefined;
-                student.attendance = undefined;
-                res.send(student);
-            } else {
-                console.log('❌ Invalid password');
-                res.send({ message: "Invalid password" });
-            }
+            query = query.eq('roll_num', parseInt(req.body.rollNum));
         } else {
-            console.log('❌ Student not found');
-            res.send({ message: "Student not found" });
+            return res.send({ message: 'Student not found' });
         }
+
+        const { data: students, error } = await query.limit(1);
+
+        if (error || !students || students.length === 0) {
+            return res.send({ message: 'Student not found' });
+        }
+
+        const student = students[0];
+        const validated = await bcrypt.compare(req.body.password, student.password);
+
+        if (!validated) {
+            return res.send({ message: 'Invalid password' });
+        }
+
+        res.send({ ...student, password: undefined, exam_result: undefined, attendance: undefined });
     } catch (err) {
         console.error('❌ Login error:', err);
         res.status(500).json(err);
@@ -95,35 +90,37 @@ const studentLogIn = async (req, res) => {
 const getAllStudents = async (req, res) => {
     try {
         console.log('📚 Fetching all students...');
-        const students = await Student.find().populate("sclassName", "sclassName");
-        
-        if (students.length > 0) {
-            console.log(`✅ Found ${students.length} students`);
-            let modifiedStudents = students.map((student) => {
-                return { ...student._doc, password: undefined };
-            });
-            res.send(modifiedStudents);
-        } else {
-            console.log('❌ No students found');
-            res.send({ message: "No students found" });
+        const { data: students, error } = await supabase
+            .from('students')
+            .select(`*, sclasses(sclass_name)`);
+
+        if (error) return res.status(500).json({ message: error.message });
+
+        if (!students || students.length === 0) {
+            return res.send({ message: 'No students found' });
         }
+
+        console.log(`✅ Found ${students.length} students`);
+        res.send(students.map(s => ({ ...s, password: undefined })));
     } catch (err) {
-        console.error('❌ Error fetching students:', err);
         res.status(500).json(err);
     }
 };
 
 const getStudents = async (req, res) => {
     try {
-        let students = await Student.find({ school: req.params.id }).populate("sclassName", "sclassName");
-        if (students.length > 0) {
-            let modifiedStudents = students.map((student) => {
-                return { ...student._doc, password: undefined };
-            });
-            res.send(modifiedStudents);
-        } else {
-            res.send({ message: "No students found" });
+        const { data: students, error } = await supabase
+            .from('students')
+            .select(`*, sclasses(sclass_name)`)
+            .eq('school_id', req.params.id);
+
+        if (error) return res.status(500).json({ message: error.message });
+
+        if (!students || students.length === 0) {
+            return res.send({ message: 'No students found' });
         }
+
+        res.send(students.map(s => ({ ...s, password: undefined })));
     } catch (err) {
         res.status(500).json(err);
     }
@@ -131,203 +128,241 @@ const getStudents = async (req, res) => {
 
 const getStudentDetail = async (req, res) => {
     try {
-        let student = await Student.findById(req.params.id)
-            .populate("school", "schoolName")
-            .populate("sclassName", "sclassName")
-            .populate("examResult.subName", "subName")
-            .populate("attendance.subName", "subName sessions");
-        if (student) {
-            student.password = undefined;
-            res.send(student);
+        const { data: student, error } = await supabase
+            .from('students')
+            .select(`*, sclasses(sclass_name), admins(school_name)`)
+            .eq('id', req.params.id)
+            .single();
+
+        if (error || !student) {
+            return res.send({ message: 'No student found' });
         }
-        else {
-            res.send({ message: "No student found" });
-        }
+
+        res.send({ ...student, password: undefined });
     } catch (err) {
         res.status(500).json(err);
     }
-}
+};
 
 const deleteStudent = async (req, res) => {
     try {
-        const result = await Student.findByIdAndDelete(req.params.id)
-        res.send(result)
-    } catch (error) {
+        const { data, error } = await supabase
+            .from('students')
+            .delete()
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ message: error.message });
+        res.send(data);
+    } catch (err) {
         res.status(500).json(err);
     }
-}
+};
 
 const deleteStudents = async (req, res) => {
     try {
-        const result = await Student.deleteMany({ school: req.params.id })
-        if (result.deletedCount === 0) {
-            res.send({ message: "No students found to delete" })
-        } else {
-            res.send(result)
+        const { data, error } = await supabase
+            .from('students')
+            .delete()
+            .eq('school_id', req.params.id)
+            .select();
+
+        if (error) return res.status(500).json({ message: error.message });
+        if (!data || data.length === 0) {
+            return res.send({ message: 'No students found to delete' });
         }
-    } catch (error) {
+        res.send(data);
+    } catch (err) {
         res.status(500).json(err);
     }
-}
+};
 
 const deleteStudentsByClass = async (req, res) => {
     try {
-        const result = await Student.deleteMany({ sclassName: req.params.id })
-        if (result.deletedCount === 0) {
-            res.send({ message: "No students found to delete" })
-        } else {
-            res.send(result)
+        const { data, error } = await supabase
+            .from('students')
+            .delete()
+            .eq('sclass_id', req.params.id)
+            .select();
+
+        if (error) return res.status(500).json({ message: error.message });
+        if (!data || data.length === 0) {
+            return res.send({ message: 'No students found to delete' });
         }
-    } catch (error) {
+        res.send(data);
+    } catch (err) {
         res.status(500).json(err);
     }
-}
+};
 
 const updateStudent = async (req, res) => {
     try {
         if (req.body.password) {
-            const salt = await bcrypt.genSalt(10)
-            res.body.password = await bcrypt.hash(res.body.password, salt)
+            const salt = await bcrypt.genSalt(10);
+            req.body.password = await bcrypt.hash(req.body.password, salt);
         }
-        let result = await Student.findByIdAndUpdate(req.params.id,
-            { $set: req.body },
-            { new: true })
 
-        result.password = undefined;
-        res.send(result)
-    } catch (error) {
-        res.status(500).json(error);
+        const { data, error } = await supabase
+            .from('students')
+            .update(req.body)
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ message: error.message });
+        res.send({ ...data, password: undefined });
+    } catch (err) {
+        res.status(500).json(err);
     }
-}
+};
 
 const updateExamResult = async (req, res) => {
     const { subName, marksObtained } = req.body;
-
     try {
-        const student = await Student.findById(req.params.id);
+        // Get existing exam results
+        const { data: student } = await supabase
+            .from('students')
+            .select('exam_result')
+            .eq('id', req.params.id)
+            .single();
 
-        if (!student) {
-            return res.send({ message: 'Student not found' });
-        }
+        if (!student) return res.send({ message: 'Student not found' });
 
-        const existingResult = student.examResult.find(
-            (result) => result.subName.toString() === subName
-        );
+        let examResult = student.exam_result || [];
+        const existingIndex = examResult.findIndex(r => r.subName === subName);
 
-        if (existingResult) {
-            existingResult.marksObtained = marksObtained;
+        if (existingIndex >= 0) {
+            examResult[existingIndex].marksObtained = marksObtained;
         } else {
-            student.examResult.push({ subName, marksObtained });
+            examResult.push({ subName, marksObtained });
         }
 
-        const result = await student.save();
-        return res.send(result);
-    } catch (error) {
-        res.status(500).json(error);
+        const { data, error } = await supabase
+            .from('students')
+            .update({ exam_result: examResult })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ message: error.message });
+        res.send(data);
+    } catch (err) {
+        res.status(500).json(err);
     }
 };
 
 const studentAttendance = async (req, res) => {
     const { subName, status, date } = req.body;
-
     try {
-        const student = await Student.findById(req.params.id);
+        const { data: student } = await supabase
+            .from('students')
+            .select('attendance')
+            .eq('id', req.params.id)
+            .single();
 
-        if (!student) {
-            return res.send({ message: 'Student not found' });
-        }
+        if (!student) return res.send({ message: 'Student not found' });
 
-        const subject = await Subject.findById(subName);
-
-        const existingAttendance = student.attendance.find(
-            (a) =>
-                a.date.toDateString() === new Date(date).toDateString() &&
-                a.subName.toString() === subName
+        let attendance = student.attendance || [];
+        const existingIndex = attendance.findIndex(
+            a => new Date(a.date).toDateString() === new Date(date).toDateString() &&
+                a.subName === subName
         );
 
-        if (existingAttendance) {
-            existingAttendance.status = status;
+        if (existingIndex >= 0) {
+            attendance[existingIndex].status = status;
         } else {
-            // Check if the student has already attended the maximum number of sessions
-            const attendedSessions = student.attendance.filter(
-                (a) => a.subName.toString() === subName
-            ).length;
-
-            if (attendedSessions >= subject.sessions) {
-                return res.send({ message: 'Maximum attendance limit reached' });
-            }
-
-            student.attendance.push({ date, status, subName });
+            attendance.push({ date, status, subName });
         }
 
-        const result = await student.save();
-        return res.send(result);
-    } catch (error) {
-        res.status(500).json(error);
+        const { data, error } = await supabase
+            .from('students')
+            .update({ attendance })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ message: error.message });
+        res.send(data);
+    } catch (err) {
+        res.status(500).json(err);
     }
 };
 
 const clearAllStudentsAttendanceBySubject = async (req, res) => {
     const subName = req.params.id;
-
     try {
-        const result = await Student.updateMany(
-            { 'attendance.subName': subName },
-            { $pull: { attendance: { subName } } }
-        );
-        return res.send(result);
-    } catch (error) {
-        res.status(500).json(error);
+        const { data: students } = await supabase
+            .from('students')
+            .select('id, attendance');
+
+        for (const student of students || []) {
+            const filtered = (student.attendance || []).filter(a => a.subName !== subName);
+            await supabase.from('students').update({ attendance: filtered }).eq('id', student.id);
+        }
+
+        res.send({ message: 'Attendance cleared for subject' });
+    } catch (err) {
+        res.status(500).json(err);
     }
 };
 
 const clearAllStudentsAttendance = async (req, res) => {
-    const schoolId = req.params.id
-
     try {
-        const result = await Student.updateMany(
-            { school: schoolId },
-            { $set: { attendance: [] } }
-        );
+        const { data, error } = await supabase
+            .from('students')
+            .update({ attendance: [] })
+            .eq('school_id', req.params.id)
+            .select();
 
-        return res.send(result);
-    } catch (error) {
-        res.status(500).json(error);
+        if (error) return res.status(500).json({ message: error.message });
+        res.send(data);
+    } catch (err) {
+        res.status(500).json(err);
     }
 };
 
 const removeStudentAttendanceBySubject = async (req, res) => {
     const studentId = req.params.id;
-    const subName = req.body.subId
-
+    const subId = req.body.subId;
     try {
-        const result = await Student.updateOne(
-            { _id: studentId },
-            { $pull: { attendance: { subName: subName } } }
-        );
+        const { data: student } = await supabase
+            .from('students')
+            .select('attendance')
+            .eq('id', studentId)
+            .single();
 
-        return res.send(result);
-    } catch (error) {
-        res.status(500).json(error);
+        const filtered = (student?.attendance || []).filter(a => a.subName !== subId);
+
+        const { data, error } = await supabase
+            .from('students')
+            .update({ attendance: filtered })
+            .eq('id', studentId)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ message: error.message });
+        res.send(data);
+    } catch (err) {
+        res.status(500).json(err);
     }
 };
-
 
 const removeStudentAttendance = async (req, res) => {
-    const studentId = req.params.id;
-
     try {
-        const result = await Student.updateOne(
-            { _id: studentId },
-            { $set: { attendance: [] } }
-        );
+        const { data, error } = await supabase
+            .from('students')
+            .update({ attendance: [] })
+            .eq('id', req.params.id)
+            .select()
+            .single();
 
-        return res.send(result);
-    } catch (error) {
-        res.status(500).json(error);
+        if (error) return res.status(500).json({ message: error.message });
+        res.send(data);
+    } catch (err) {
+        res.status(500).json(err);
     }
 };
-
 
 module.exports = {
     studentRegister,
@@ -341,7 +376,6 @@ module.exports = {
     studentAttendance,
     deleteStudentsByClass,
     updateExamResult,
-
     clearAllStudentsAttendanceBySubject,
     clearAllStudentsAttendance,
     removeStudentAttendanceBySubject,

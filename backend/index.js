@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const { helmet, apiLimiter, sanitizeInput } = require("./middleware/security");
+const supabase = require("./supabaseClient");
 
 dotenv.config();
 
@@ -10,7 +10,7 @@ const app = express();
 const Routes = require("./routes/route.js");
 const EnhancedRoutes = require("./routes/enhanced-routes.js");
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Security Middleware
 app.use(helmet());
@@ -21,21 +21,18 @@ const allowedOrigins = [
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
-const corsOptions = {
+app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(allowed => origin.includes(allowed))) {
+        if (allowedOrigins.some(allowed => origin.includes(allowed))) {
             callback(null, true);
         } else {
-            callback(null, true); // Allow all for now, can restrict later
+            callback(null, true); // Allow all for now
         }
     },
     credentials: true,
     optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+}));
 
 // Body Parser
 app.use(express.json({ limit: '10mb' }));
@@ -47,25 +44,28 @@ app.use(sanitizeInput);
 // Rate Limiting
 app.use('/api/', apiLimiter);
 
-// MongoDB Connection
-mongoose
-    .connect(process.env.MONGO_URL, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-    })
-    .then(() => {
-        console.log("✅ Connected to MongoDB - BIS NOC School System");
-    })
-    .catch((err) => {
-        console.log("❌ MongoDB Connection Error:", err);
-        process.exit(1);
-    });
+// Verify Supabase connection on startup
+async function verifySupabaseConnection() {
+    try {
+        const { error } = await supabase.from('admins').select('id').limit(1);
+        if (error && error.code !== 'PGRST116') {
+            console.warn('⚠️  Supabase query warning:', error.message);
+        } else {
+            console.log('✅ Connected to Supabase - BIS NOC School System');
+        }
+    } catch (err) {
+        console.error('❌ Supabase connection error:', err.message);
+    }
+}
+
+verifySupabaseConnection();
 
 // Root route
 app.get('/', (req, res) => {
-    res.status(200).json({ 
-        status: 'OK', 
+    res.status(200).json({
+        status: 'OK',
         message: 'BIS NOC School Management System API',
+        database: 'Supabase (PostgreSQL)',
         timestamp: new Date().toISOString(),
         endpoints: {
             health: '/health',
@@ -76,18 +76,19 @@ app.get('/', (req, res) => {
     });
 });
 
-// Health Check Endpoint
+// Health Check
 app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'OK', 
+    res.status(200).json({
+        status: 'OK',
         message: 'BIS NOC School Management System is running',
+        database: 'Supabase',
         timestamp: new Date().toISOString()
     });
 });
 
 // Routes
 app.use('/', Routes);
-app.use('/api', EnhancedRoutes); // New enhanced API routes
+app.use('/api', EnhancedRoutes);
 
 // 404 Handler
 app.use((req, res) => {
@@ -103,13 +104,10 @@ app.use((err, req, res, next) => {
     });
 });
 
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`🚀 BIS NOC School Server running on port ${PORT}`);
-        console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-    });
-}
+// Start server
+app.listen(PORT, () => {
+    console.log(`🚀 BIS NOC School Server running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+});
 
-// Export for Vercel serverless
 module.exports = app;

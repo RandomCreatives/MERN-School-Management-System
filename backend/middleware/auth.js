@@ -1,19 +1,24 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/userSchema');
+const supabase = require('../supabaseClient');
 
 // JWT Authentication Middleware
 const authenticate = async (req, res, next) => {
     try {
         const token = req.header('Authorization')?.replace('Bearer ', '');
-        
+
         if (!token) {
             return res.status(401).json({ message: 'Authentication required' });
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id).select('-password');
 
-        if (!user || !user.isActive) {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, username, email, role, is_active, assigned_classes, assigned_subjects, school_id')
+            .eq('id', decoded.id)
+            .single();
+
+        if (error || !user || !user.is_active) {
             return res.status(401).json({ message: 'Invalid authentication' });
         }
 
@@ -33,8 +38,8 @@ const authorize = (...roles) => {
         }
 
         if (!roles.includes(req.user.role)) {
-            return res.status(403).json({ 
-                message: 'You do not have permission to perform this action' 
+            return res.status(403).json({
+                message: 'You do not have permission to perform this action'
             });
         }
 
@@ -53,7 +58,7 @@ const checkPermission = (permission) => {
         };
 
         const userPermissions = rolePermissions[req.user.role] || [];
-        
+
         if (userPermissions.includes('full_access') || userPermissions.includes(permission)) {
             next();
         } else {

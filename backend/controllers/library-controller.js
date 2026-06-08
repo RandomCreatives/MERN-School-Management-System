@@ -1,346 +1,181 @@
-const Library = require('../models/librarySchema');
-const Student = require('../models/studentSchema');
+const supabase = require('../supabaseClient');
 
-// Issue a book to a student
 const issueBook = async (req, res) => {
     try {
-        const {
-            studentId,
-            bookTitle,
-            bookISBN,
-            bookAuthor,
-            bookCategory,
-            borrowDate,
-            dueDate,
-            condition,
-            notes,
-            classId
-        } = req.body;
-
+        const { studentId, bookTitle, bookISBN, bookAuthor, bookCategory, borrowDate, dueDate, condition, notes, classId } = req.body;
         const issuedBy = req.user.id;
-        const schoolId = req.user.school;
+        const schoolId = req.user.school_id;
 
-        // Check if student exists
-        const student = await Student.findById(studentId);
-        if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
-        }
+        const { data: overdueBooks } = await supabase.from('library')
+            .select('id, status').eq('student_id', studentId).in('status', ['borrowed', 'overdue']);
 
-        // Check if student has overdue books
-        const overdueBooks = await Library.find({
-            student: studentId,
-            status: { $in: ['borrowed', 'overdue'] }
-        });
+        if (overdueBooks && overdueBooks.length >= 3)
+            return res.status(400).json({ message: 'Student has reached maximum book limit (3 books)' });
 
-        if (overdueBooks.length >= 3) {
-            return res.status(400).json({ 
-                message: 'Student has reached maximum book limit (3 books)' 
-            });
-        }
+        if (overdueBooks && overdueBooks.some(b => b.status === 'overdue'))
+            return res.status(400).json({ message: 'Student has overdue books. Please return them first.' });
 
-        const hasOverdue = overdueBooks.some(book => book.status === 'overdue');
-        if (hasOverdue) {
-            return res.status(400).json({ 
-                message: 'Student has overdue books. Please return them first.' 
-            });
-        }
+        const { data, error } = await supabase.from('library')
+            .insert([{
+                student_id: studentId,
+                book_title: bookTitle,
+                book_isbn: bookISBN,
+                book_author: bookAuthor,
+                book_category: bookCategory,
+                borrow_date: borrowDate || new Date().toISOString(),
+                due_date: dueDate,
+                status: 'borrowed',
+                condition_borrowed: condition || 'good',
+                notes,
+                issued_by: issuedBy,
+                class_id: classId,
+                school_id: schoolId,
+                fine_amount: 0,
+                fine_paid: false
+            }])
+            .select(`*, students(name, student_id, roll_num), sclasses(sclass_name)`)
+            .single();
 
-        // Create library record
-        const libraryRecord = new Library({
-            student: studentId,
-            bookTitle,
-            bookISBN,
-            bookAuthor,
-            bookCategory,
-            borrowDate: borrowDate || new Date(),
-            dueDate,
-            status: 'borrowed',
-            condition: {
-                borrowed: condition || 'good'
-            },
-            notes,
-            issuedBy,
-            class: classId,
-            school: schoolId
-        });
-
-        await libraryRecord.save();
-
-        const populatedRecord = await Library.findById(libraryRecord._id)
-            .populate('student', 'name studentId rollNum')
-            .populate('issuedBy', 'username')
-            .populate('class', 'sclassName');
-
-        res.status(201).json({
-            message: 'Book issued successfully',
-            record: populatedRecord
-        });
+        if (error) return res.status(500).json({ message: error.message });
+        res.status(201).json({ message: 'Book issued successfully', record: data });
     } catch (error) {
-        console.error('Issue book error:', error);
         res.status(500).json({ message: 'Error issuing book' });
     }
 };
 
-// Return a book
 const returnBook = async (req, res) => {
     try {
         const { recordId } = req.params;
         const { returnCondition, notes } = req.body;
         const returnedTo = req.user.id;
 
-        const record = await Library.findById(recordId);
+        const { data: record } = await supabase.from('library').select('*').eq('id', recordId).single();
+        if (!record) return res.status(404).json({ message: 'Library record not found' });
+        if (record.status === 'returned') return res.status(400).json({ message: 'Book already returned' });
 
-        if (!record) {
-            return res.status(404).json({ message: 'Library record not found' });
-        }
+        const returnDate = new Date().toISOString();
+        const dueDate = new Date(record.due_date);
+        const daysLate = Math.ceil((new Date(returnDate) - dueDate) / (1000 * 60 * 60 * 24));
+        const fineAmount = daysLate > 0 ? daysLate * 5 : 0;
 
-        if (record.status === 'returned') {
-            return res.status(400).json({ message: 'Book already returned' });
-        }
+        const { data, error } = await supabase.from('library')
+            .update({
+                return_date: returnDate,
+                status: 'returned',
+                condition_returned: returnCondition,
+                returned_to: returnedTo,
+                fine_amount: fineAmount,
+                fine_reason: fineAmount > 0 ? `${daysLate} day(s) overdue` : null,
+                notes: record.notes ? record.notes + '\n' + (notes || '') : notes || ''
+            })
+            .eq('id', recordId)
+            .select(`*, students(name, student_id, roll_num)`)
+            .single();
 
-        // Update record
-        record.returnDate = new Date();
-        record.status = 'returned';
-        record.condition.returned = returnCondition;
-        record.returnedTo = returnedTo;
-        if (notes) record.notes = (record.notes || '') + '\n' + notes;
-
-        // Calculate fine if overdue
-        record.calculateFine();
-
-        await record.save();
-
-        const populatedRecord = await Library.findById(record._id)
-            .populate('student', 'name studentId rollNum')
-            .populate('issuedBy', 'username')
-            .populate('returnedTo', 'username')
-            .populate('class', 'sclassName');
-
-        res.json({
-            message: 'Book returned successfully',
-            record: populatedRecord,
-            fine: record.fine.amount > 0 ? record.fine : null
-        });
+        if (error) return res.status(500).json({ message: error.message });
+        res.json({ message: 'Book returned successfully', record: data, fine: fineAmount > 0 ? { amount: fineAmount } : null });
     } catch (error) {
-        console.error('Return book error:', error);
         res.status(500).json({ message: 'Error returning book' });
     }
 };
 
-// Get student's borrowing history
 const getStudentLibraryHistory = async (req, res) => {
     try {
         const { studentId } = req.params;
         const { status } = req.query;
 
-        const query = { student: studentId };
-        if (status) {
-            query.status = status;
-        }
+        let query = supabase.from('library').select('*').eq('student_id', studentId).order('borrow_date', { ascending: false });
+        if (status) query = query.eq('status', status);
 
-        const records = await Library.find(query)
-            .populate('issuedBy', 'username')
-            .populate('returnedTo', 'username')
-            .sort({ borrowDate: -1 });
+        const { data: records, error } = await query;
+        if (error) return res.status(500).json({ message: error.message });
 
-        // Calculate statistics
         const stats = {
             totalBorrowed: records.length,
             currentlyBorrowed: records.filter(r => r.status === 'borrowed').length,
             overdue: records.filter(r => r.status === 'overdue').length,
             returned: records.filter(r => r.status === 'returned').length,
-            totalFines: records.reduce((sum, r) => sum + r.fine.amount, 0),
-            unpaidFines: records.filter(r => r.fine.amount > 0 && !r.fine.paid)
-                .reduce((sum, r) => sum + r.fine.amount, 0)
+            totalFines: records.reduce((s, r) => s + (r.fine_amount || 0), 0),
+            unpaidFines: records.filter(r => r.fine_amount > 0 && !r.fine_paid).reduce((s, r) => s + r.fine_amount, 0)
         };
 
         res.json({ records, stats });
     } catch (error) {
-        console.error('Get library history error:', error);
         res.status(500).json({ message: 'Error fetching library history' });
     }
 };
 
-// Get all borrowed books (current)
 const getCurrentBorrowedBooks = async (req, res) => {
     try {
         const { schoolId, classId } = req.query;
 
-        const query = {
-            school: schoolId,
-            status: { $in: ['borrowed', 'overdue'] }
-        };
+        let query = supabase.from('library')
+            .select(`*, students(name, student_id, roll_num), sclasses(sclass_name)`)
+            .eq('school_id', schoolId)
+            .in('status', ['borrowed', 'overdue'])
+            .order('due_date', { ascending: true });
 
-        if (classId) {
-            query.class = classId;
-        }
+        if (classId) query = query.eq('class_id', classId);
 
-        const records = await Library.find(query)
-            .populate('student', 'name studentId rollNum')
-            .populate('class', 'sclassName')
-            .populate('issuedBy', 'username')
-            .sort({ dueDate: 1 });
+        const { data, error } = await query;
+        if (error) return res.status(500).json({ message: error.message });
 
-        // Check and update overdue status
-        for (let record of records) {
-            if (record.checkOverdue()) {
-                await record.save();
-            }
-        }
-
-        res.json({ records });
+        res.json({ records: data });
     } catch (error) {
-        console.error('Get borrowed books error:', error);
         res.status(500).json({ message: 'Error fetching borrowed books' });
     }
 };
 
-// Get overdue books
 const getOverdueBooks = async (req, res) => {
     try {
         const { schoolId } = req.query;
+        const { data, error } = await supabase.from('library')
+            .select(`*, students(name, student_id, roll_num), sclasses(sclass_name)`)
+            .eq('school_id', schoolId).eq('status', 'overdue').order('due_date', { ascending: true });
 
-        const records = await Library.find({
-            school: schoolId,
-            status: 'overdue'
-        })
-            .populate('student', 'name studentId rollNum parentContact')
-            .populate('class', 'sclassName')
-            .populate('issuedBy', 'username')
-            .sort({ dueDate: 1 });
-
-        res.json({ records, count: records.length });
+        if (error) return res.status(500).json({ message: error.message });
+        res.json({ records: data, count: data.length });
     } catch (error) {
-        console.error('Get overdue books error:', error);
         res.status(500).json({ message: 'Error fetching overdue books' });
     }
 };
 
-// Pay fine
 const payFine = async (req, res) => {
     try {
         const { recordId } = req.params;
         const { paymentMethod, notes } = req.body;
 
-        const record = await Library.findById(recordId);
+        const { data: record } = await supabase.from('library').select('fine_amount, notes').eq('id', recordId).single();
+        if (!record) return res.status(404).json({ message: 'Library record not found' });
+        if (!record.fine_amount) return res.status(400).json({ message: 'No fine to pay' });
 
-        if (!record) {
-            return res.status(404).json({ message: 'Library record not found' });
-        }
+        const { data, error } = await supabase.from('library')
+            .update({ fine_paid: true, notes: (record.notes || '') + `\nFine paid: ${record.fine_amount} ETB via ${paymentMethod}. ${notes || ''}` })
+            .eq('id', recordId).select().single();
 
-        if (record.fine.amount === 0) {
-            return res.status(400).json({ message: 'No fine to pay' });
-        }
-
-        record.fine.paid = true;
-        record.notes = (record.notes || '') + `\nFine paid: ${record.fine.amount} ETB via ${paymentMethod}. ${notes || ''}`;
-
-        await record.save();
-
-        res.json({
-            message: 'Fine paid successfully',
-            record
-        });
+        if (error) return res.status(500).json({ message: error.message });
+        res.json({ message: 'Fine paid successfully', record: data });
     } catch (error) {
-        console.error('Pay fine error:', error);
         res.status(500).json({ message: 'Error processing payment' });
     }
 };
 
-// Library analytics
 const getLibraryAnalytics = async (req, res) => {
     try {
-        const { schoolId, startDate, endDate } = req.query;
+        const { schoolId } = req.query;
 
-        const matchQuery = {
-            school: schoolId
-        };
+        const { data: all } = await supabase.from('library').select('status, book_title, book_author, book_category, fine_amount, fine_paid').eq('school_id', schoolId);
 
-        if (startDate && endDate) {
-            matchQuery.borrowDate = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
-        }
+        const totalBorrowed = all?.length || 0;
+        const currentlyBorrowed = all?.filter(r => ['borrowed', 'overdue'].includes(r.status)).length || 0;
+        const overdueCount = all?.filter(r => r.status === 'overdue').length || 0;
+        const totalFines = all?.reduce((s, r) => s + (r.fine_amount || 0), 0) || 0;
+        const unpaidFines = all?.filter(r => r.fine_amount > 0 && !r.fine_paid).reduce((s, r) => s + r.fine_amount, 0) || 0;
 
-        // Total books borrowed
-        const totalBorrowed = await Library.countDocuments(matchQuery);
-
-        // Currently borrowed
-        const currentlyBorrowed = await Library.countDocuments({
-            school: schoolId,
-            status: { $in: ['borrowed', 'overdue'] }
-        });
-
-        // Overdue books
-        const overdueCount = await Library.countDocuments({
-            school: schoolId,
-            status: 'overdue'
-        });
-
-        // Popular books
-        const popularBooks = await Library.aggregate([
-            { $match: matchQuery },
-            {
-                $group: {
-                    _id: '$bookTitle',
-                    borrowCount: { $sum: 1 },
-                    author: { $first: '$bookAuthor' },
-                    category: { $first: '$bookCategory' }
-                }
-            },
-            { $sort: { borrowCount: -1 } },
-            { $limit: 10 }
-        ]);
-
-        // Category distribution
-        const categoryStats = await Library.aggregate([
-            { $match: matchQuery },
-            {
-                $group: {
-                    _id: '$bookCategory',
-                    count: { $sum: 1 }
-                }
-            },
-            { $sort: { count: -1 } }
-        ]);
-
-        // Total fines
-        const fineStats = await Library.aggregate([
-            { $match: { school: schoolId } },
-            {
-                $group: {
-                    _id: null,
-                    totalFines: { $sum: '$fine.amount' },
-                    unpaidFines: {
-                        $sum: {
-                            $cond: [{ $eq: ['$fine.paid', false] }, '$fine.amount', 0]
-                        }
-                    }
-                }
-            }
-        ]);
-
-        res.json({
-            totalBorrowed,
-            currentlyBorrowed,
-            overdueCount,
-            popularBooks,
-            categoryStats,
-            fineStats: fineStats[0] || { totalFines: 0, unpaidFines: 0 }
-        });
+        res.json({ totalBorrowed, currentlyBorrowed, overdueCount, fineStats: { totalFines, unpaidFines } });
     } catch (error) {
-        console.error('Library analytics error:', error);
         res.status(500).json({ message: 'Error fetching analytics' });
     }
 };
 
-module.exports = {
-    issueBook,
-    returnBook,
-    getStudentLibraryHistory,
-    getCurrentBorrowedBooks,
-    getOverdueBooks,
-    payFine,
-    getLibraryAnalytics
-};
+module.exports = { issueBook, returnBook, getStudentLibraryHistory, getCurrentBorrowedBooks, getOverdueBooks, payFine, getLibraryAnalytics };

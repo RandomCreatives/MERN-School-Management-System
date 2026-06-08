@@ -1,14 +1,13 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const User = require('../models/userSchema');
-const Admin = require('../models/adminSchema');
+const supabase = require('../supabaseClient');
 
 // Generate JWT Token
 const generateToken = (userId, role) => {
     return jwt.sign(
         { id: userId, role },
         process.env.JWT_SECRET,
-        { 
+        {
             expiresIn: process.env.JWT_EXPIRES_IN || '8h',
             issuer: 'bis-noc-school-system',
             audience: 'school-users'
@@ -21,40 +20,38 @@ const registerUser = async (req, res) => {
     try {
         const { username, email, password, role, assignedClasses, assignedSubjects, schoolId } = req.body;
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-        if (existingUser) {
-            return res.status(400).json({ 
-                message: existingUser.email === email ? 'Email already exists' : 'Username already exists' 
-            });
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('id, email, username')
+            .or(`email.eq.${email},username.eq.${username}`)
+            .limit(1);
+
+        if (existingUser && existingUser.length > 0) {
+            const msg = existingUser[0].email === email ? 'Email already exists' : 'Username already exists';
+            return res.status(400).json({ message: msg });
         }
 
-        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create new user
-        const user = new User({
-            username,
-            email,
-            password: hashedPassword,
-            role,
-            assignedClasses: assignedClasses || [],
-            assignedSubjects: assignedSubjects || [],
-            school: schoolId,
-            isActive: true
-        });
+        const { data: user, error } = await supabase
+            .from('users')
+            .insert([{
+                username,
+                email,
+                password: hashedPassword,
+                role,
+                assigned_classes: assignedClasses || [],
+                assigned_subjects: assignedSubjects || [],
+                school_id: schoolId,
+                is_active: true
+            }])
+            .select('id, username, email, role, is_active, school_id')
+            .single();
 
-        await user.save();
+        if (error) return res.status(500).json({ message: error.message });
 
-        // Remove password from response
-        const userResponse = user.toObject();
-        delete userResponse.password;
-
-        res.status(201).json({
-            message: 'User registered successfully',
-            user: userResponse
-        });
+        res.status(201).json({ message: 'User registered successfully', user });
     } catch (error) {
         console.error('Registration error:', error);
         res.status(500).json({ message: 'Server error during registration' });
@@ -66,60 +63,39 @@ const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Find user
-        const user = await User.findOne({ email }).populate('school', 'schoolName');
-        
-        if (!user) {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .single();
+
+        if (error || !user) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Check if user is active
-        if (!user.isActive) {
+        if (!user.is_active) {
             return res.status(403).json({ message: 'Account is deactivated' });
         }
 
-        // Verify password
         const isValidPassword = await bcrypt.compare(password, user.password);
-        
         if (!isValidPassword) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Update login history
-        user.lastLogin = new Date();
-        user.loginHistory.push({
-            timestamp: new Date(),
-            ipAddress: req.ip,
-            userAgent: req.get('user-agent')
-        });
-        
-        // Keep only last 10 login records
-        if (user.loginHistory.length > 10) {
-            user.loginHistory = user.loginHistory.slice(-10);
-        }
-        
-        await user.save();
+        // Update last login
+        await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
-        // Generate token
-        const token = generateToken(user._id, user.role);
+        const token = generateToken(user.id, user.role);
+        const { password: _pw, login_history, ...userResponse } = user;
 
-        // Prepare response
-        const userResponse = user.toObject();
-        delete userResponse.password;
-        delete userResponse.loginHistory;
-
-        res.json({
-            message: 'Login successful',
-            token,
-            user: userResponse
-        });
+        res.json({ message: 'Login successful', token, user: userResponse });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ message: 'Server error during login' });
     }
 };
 
-// Admin Login (existing admin system)
+// Admin Login
 const adminLogin = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -128,28 +104,24 @@ const adminLogin = async (req, res) => {
             return res.status(400).json({ message: 'Email and password are required' });
         }
 
-        const admin = await Admin.findOne({ email });
-        
-        if (!admin) {
+        const { data: admin, error } = await supabase
+            .from('admins')
+            .select('*')
+            .eq('email', email)
+            .single();
+
+        if (error || !admin) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // For now, direct password comparison (should use bcrypt in production)
         if (password !== admin.password) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Generate token
-        const token = generateToken(admin._id, 'admin');
+        const token = generateToken(admin.id, 'admin');
+        const { password: _pw, ...adminResponse } = admin;
 
-        const adminResponse = admin.toObject();
-        delete adminResponse.password;
-
-        res.json({
-            message: 'Admin login successful',
-            token,
-            admin: adminResponse
-        });
+        res.json({ message: 'Admin login successful', token, admin: adminResponse });
     } catch (error) {
         console.error('Admin login error:', error);
         res.status(500).json({ message: 'Server error during login' });
@@ -159,13 +131,13 @@ const adminLogin = async (req, res) => {
 // Get Current User Profile
 const getCurrentUser = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id)
-            .select('-password')
-            .populate('assignedClasses', 'sclassName')
-            .populate('assignedSubjects', 'subName')
-            .populate('school', 'schoolName');
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, username, email, role, is_active, assigned_classes, assigned_subjects, school_id, last_login')
+            .eq('id', req.user.id)
+            .single();
 
-        if (!user) {
+        if (error || !user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
@@ -176,10 +148,9 @@ const getCurrentUser = async (req, res) => {
     }
 };
 
-// Logout (client-side token removal, but we can track it)
+// Logout
 const logout = async (req, res) => {
     try {
-        // In a more advanced setup, you could blacklist the token here
         res.json({ message: 'Logout successful' });
     } catch (error) {
         res.status(500).json({ message: 'Server error during logout' });
@@ -190,26 +161,22 @@ const logout = async (req, res) => {
 const changePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
-        const userId = req.user.id;
 
-        const user = await User.findById(userId);
-        
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
+        const { data: user } = await supabase
+            .from('users')
+            .select('password')
+            .eq('id', req.user.id)
+            .single();
 
-        // Verify current password
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
         const isValid = await bcrypt.compare(currentPassword, user.password);
-        
-        if (!isValid) {
-            return res.status(401).json({ message: 'Current password is incorrect' });
-        }
+        if (!isValid) return res.status(401).json({ message: 'Current password is incorrect' });
 
-        // Hash new password
         const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        
-        await user.save();
+        const hashed = await bcrypt.hash(newPassword, salt);
+
+        await supabase.from('users').update({ password: hashed }).eq('id', req.user.id);
 
         res.json({ message: 'Password changed successfully' });
     } catch (error) {
@@ -218,11 +185,4 @@ const changePassword = async (req, res) => {
     }
 };
 
-module.exports = {
-    registerUser,
-    loginUser,
-    adminLogin,
-    getCurrentUser,
-    logout,
-    changePassword
-};
+module.exports = { registerUser, loginUser, adminLogin, getCurrentUser, logout, changePassword };
